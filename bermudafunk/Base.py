@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import signal
 
 import config
 
@@ -11,18 +12,25 @@ if config.DEBUG:
 
 logger = logging.getLogger('umschalter')
 
-cleanup = asyncio.Event()
+cleanup = asyncio.Event(loop=loop)
 cleanup_tasks = []
 
 
 def run_loop():
     global loop
+
+    for sig_name in ('SIGINT', 'SIGTERM', 'SIGABRT'):
+        loop.add_signal_handler(getattr(signal, sig_name), stop)
+
     try:
         loop.run_forever()
-    except KeyboardInterrupt:
-        pass
+    finally:
+        if len(cleanup_tasks) > 0:
+            loop.run_until_complete(asyncio.wait(cleanup_tasks))
+        loop.stop()
+        loop.close()
 
+
+def stop():
     cleanup.set()
-    loop.run_until_complete(asyncio.wait(cleanup_tasks))
-
     loop.stop()
