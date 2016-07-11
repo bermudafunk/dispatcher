@@ -2,8 +2,7 @@ import asyncio
 from RPi import GPIO
 
 from .Base import loop, logger
-
-from . import Queues, Events
+from . import Queues, Base
 
 _initialized = None
 
@@ -80,7 +79,7 @@ def _setup():
         logger.debug('setup create process_event loop task')
         _initialized = loop.create_task(_process_event())
         logger.debug('setup create cleanup task')
-        Events.cleanup_tasks.append(loop.create_task(_cleanup()))
+        Base.cleanup_tasks.append(loop.create_task(_cleanup()))
 
 
 def _check_pin(pin, usage):
@@ -95,7 +94,7 @@ def _check_pin(pin, usage):
 
 async def _cleanup():
     logger.debug('cleanup awaiting')
-    await Events.cleanup.wait()
+    await Base.cleanup.wait()
     logger.debug('cleanup cancel process_event')
     _initialized.cancel()
     logger.debug('cleanup reset GPIO')
