@@ -19,21 +19,25 @@ class Led:
     STATE_BLINK = 'blink'
     STATES = [STATE_OFF, STATE_ON, STATE_BLINK]
 
-    state = STATE_OFF
-
-    pin = None
-
-    blink_freq = 2
-
-    _blink_task = None
-
     def __init__(self, pin):
+        global leds
+        leds[str(pin)] = self
+
         self.pin = int(pin)
+        self.state = self.STATE_OFF
+        self.blink_freq = 2
+
+        self._blink_task = None
+
         _setup()
         _check_pin(self.pin, 'led')
         GPIO.setup(self.pin, GPIO.OUT)
         GPIO.output(self.pin, GPIO.LOW)
-        self.state = self.STATE_OFF
+
+    def __del__(self):
+        if self._blink_task is not None:
+            self._blink_task.cancel()
+        GPIO.output(self.pin, GPIO.LOW)
 
     def get_state(self):
         return self.state
