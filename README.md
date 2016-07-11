@@ -10,3 +10,5 @@ Hauptmerkmal ist das Abrufen von Presets.
 
 Dies umfasst als Grundstein die Kommunikation mit der Appliance, welche entweder
 über einen serielle Verbindung (RS-232 Port) oder über IP/UDP.
+
+    nc -l -p 48630 -u
