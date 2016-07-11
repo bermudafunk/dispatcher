@@ -12,6 +12,11 @@ def get_queue(name: str, *args, **kwargs) -> Queue:
     return queues[name]
 
 
-def put_in_queue(item, name: str) -> Queue:
+def get_from_queue(name: str):
+    logger.debug('get_from_queue called %s', name)
+    return get_queue(name).get()
+
+
+def put_in_queue(item, name: str):
     logger.debug('put_in_queue called %s %s', item, name)
     return get_queue(name).put(item)

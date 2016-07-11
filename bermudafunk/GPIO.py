@@ -51,7 +51,7 @@ class Led:
         old_state = self.state
         self.state = new_state
 
-        if old_state is self.STATE_BLINK:
+        if self._blink_task is not None:
             self._blink_task.cancel()
             self._blink_task = None
 
