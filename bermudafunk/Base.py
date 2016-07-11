@@ -19,6 +19,9 @@ cleanup_tasks = []
 def run_loop():
     global loop
 
+    from bermudafunk import Systemd
+    Systemd.ready()
+
     for sig_name in ('SIGINT', 'SIGTERM', 'SIGABRT'):
         loop.add_signal_handler(getattr(signal, sig_name), stop)
 

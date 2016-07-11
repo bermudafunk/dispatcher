@@ -1,12 +1,15 @@
-from bermudafunk import Base, GPIO, Symnet
+from bermudafunk import Base, GPIO, Symnet, Systemd
 
 if __name__ == '__main__':
     Base.logger.debug('Main Start')
+    try:
+        Systemd.setup()
+    finally:
+        pass
 
     device = Symnet.SymNetDevice(local_addr=(Base.config.myIp, Base.config.myPort), remote_addr=(Base.config.remoteIp, Base.config.remotePort))
     onAirSwitch = device.define_selector(10, 4)
     monitorSelector = device.define_selector(12, 8)
-
 
     async def clb(controller: Symnet.SymNetSelectorController):
         current_position = await controller.get_position()
