@@ -41,9 +41,11 @@ class Led:
     def get_state(self):
         return self.state
 
-    def set_state(self, new_state, force=False):
+    def set_state(self, new_state, force=False, blink_freq=2):
         if new_state not in self.STATES:
-            raise Exception('Unknown state %s' % (new_state,))
+            raise Exception('Unknown state %s' % new_state)
+
+        self.blink_freq = blink_freq
 
         if self.state == new_state and not force:
             return  # Same state, nothing to change
