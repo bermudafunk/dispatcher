@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 import asyncio
 import re
 from bermudafunk import Base, Queues
@@ -11,6 +15,7 @@ class SymNetRawProtocolCallback:
         self.future = Base.loop.create_future()
 
     def callback(self, *args, **kwargs):
+        logger.debug("raw protocol callback called")
         try:
             result = self._callback(*args, **kwargs)
             self.future.set_result(result)
@@ -20,45 +25,58 @@ class SymNetRawProtocolCallback:
 
 class SymNetRawProtocol(asyncio.DatagramProtocol):
     def __init__(self):
+        logger.debug("init a SymNetRawProtocol")
         self.transport = None
         self.callback_queue = []
 
     def connection_made(self, transport):
+        logger.debug("connection established")
         self.transport = transport
 
     def datagram_received(self, data, addr):
+        logger.debug("a datagram was received - %d bytes", len(data))
         data_str = data.decode()
         lines = data_str.split('\r')
         lines = [lines[i] for i in range(len(lines)) if len(lines[i]) > 0]
 
+        logger.debug("%d non-empty lines received", len(lines))
+
         if len(self.callback_queue) > 0:
+            logger.debug("iterate over callback queue")
             for callback_obj in self.callback_queue:
                 if len(lines) == 1 and lines[0] == 'NAK':
+                    logger.debug("got only a NAK - forwarding to the first callback")
                     callback_obj.callback(data_str)
                     self.callback_queue.remove(callback_obj)
                     return
 
                 if callback_obj.regex is not None:
+                    logger.debug("callback comes with a regex - try match on the whole received data string")
                     m = re.match(callback_obj.regex, data_str)
                     if m is not None:
+                        logger.debug("regex worked - deliver to callback and remove it")
                         callback_obj.callback(data_str, m=m)
                         self.callback_queue.remove(callback_obj)
                         return
                 elif len(lines) == callback_obj.expected_lines:
+                    logger.debug("callback has no regex, but the expected line count equals to the received one")
                     callback_obj.callback(data_str)
                     self.callback_queue.remove(callback_obj)
                     return
 
         if len(lines) == 1:
             if lines[0] == 'NAK':
-                print('Uncaught NAK, please define a callback')
+                logger.error('Uncaught NAK - this is probably a huge error')
+                return
             if lines[0] == 'ACK':
+                logger.debug('got an ACK, but no callbacks waiting for input - just ignore it')
                 return
 
+        logger.debug("no callbacks defined and not an ACK or NAK - must be pushed data")
         for line in lines:
-            m = re.match('^#([0-9]{5})=(\-?[0-9]{4,5})$', line)
+            m = re.match('^#([0-9]{5})=(-?[0-9]{4,5})$', line)
             if m is None:
-                print('unkown', line)
+                logger.error("error in in the received line <%s>", line)
                 continue
 
             asyncio.ensure_future(Queues.put_in_queue({
@@ -67,9 +85,11 @@ class SymNetRawProtocol(asyncio.DatagramProtocol):
             }, 'symnet_controller_state'))
 
     def error_received(self, exc):
-        print('Error received:', exc)
+        logger.error('Error received %s', exc)
+        pass
 
     def write(self, data):
+        logger.debug('send data to symnet %s', data)
         self.transport.sendto(data.encode())
 
 
@@ -77,6 +97,7 @@ class SymNetController:
     value_timeout = 10  # in seconds
 
     def __init__(self, controller_number, protocol: SymNetRawProtocol):
+        logger.debug('create new SymNetController with %d', controller_number)
         self.cn = int(controller_number)
         self.proto = protocol
 
@@ -88,28 +109,32 @@ class SymNetController:
         Base.loop.run_until_complete(self._retrieve_current_state().future)
 
     def add_obs(self, clb):
+        logger.debug("add a observer (%s) to controller %d", clb, self.cn)
         return self.obs.append(clb)
 
     def rem_obs(self, clb):
+        logger.debug("remove a observer (%s) to controller %d", clb, self.cn)
         return self.obs.remove(clb)
 
     async def _get_raw_value(self):
+        logger.debug('retrieve current value for controller %d', self.cn)
         if Base.loop.time() - self.raw_value_time > self.value_timeout:
-            print('Value timeout')
+            logger.debug('value timeout - refresh')
             await self._retrieve_current_state().future
         return self.raw_value
 
-    def _set_raw_value(self, value, updateTime=False):
-        Base.logger.debug('set_raw_value called on {cn} with {cv}'.format(cn=self.cn, cv=value))
+    def _set_raw_value(self, value):
+        logger.debug('set_raw_value called on %d with %d', self.cn, value)
         old_value = self.raw_value
         self.raw_value = value
-        if updateTime:
-            self.raw_value_time = Base.loop.time()
+        self.raw_value_time = Base.loop.time()
         if old_value != value:
+            logger.debug("value has changed - notify observers")
             for clb in self.obs:
-                asyncio.ensure_future(clb(self))
+                asyncio.ensure_future(clb(self, old_value=old_value, new_value=value))
 
     def _assure_current_state(self):
+        logger.debug("assure current controller %d state to set on the symnet device", self.cn)
         callback_obj = SymNetRawProtocolCallback(
             callback=self._assure_callback,
             expected_lines=1,
@@ -120,10 +145,12 @@ class SymNetController:
         return callback_obj
 
     def _assure_callback(self, data_str, m=None):
-        if m is not None and m.group(1) == 'NAK':
-            raise Exception('Unknown error occurred awaiting the acknowledge of setting controller number {:d}'.format(self.cn))
+        if m is None or m.group(1) == 'NAK':
+            raise Exception(
+                'Unknown error occurred awaiting the acknowledge of setting controller number {:d}'.format(self.cn))
 
     def _retrieve_current_state(self):
+        logger.debug("request current value from the symnet device for controller %d", self.cn)
         callback_obj = SymNetRawProtocolCallback(
             callback=self._retrieve_callback,
             expected_lines=1,
@@ -136,7 +163,7 @@ class SymNetController:
     def _retrieve_callback(self, data_str, m=None):
         if m is None:
             raise Exception('Error executing GS2 command, controller {}'.format(self.cn))
-        self._set_raw_value(int(m.group(1)), updateTime=True)
+        self._set_raw_value(int(m.group(1)))
 
 
 class SymNetSelectorController(SymNetController):
@@ -162,7 +189,7 @@ class SymNetButtonController(SymNetController):
         self._set_raw_value(0)
         await self._assure_current_state().future
 
-    async def get(self):
+    async def pressed(self):
         return await self._get_raw_value() > 0
 
     def set(self, state):
@@ -174,6 +201,7 @@ class SymNetButtonController(SymNetController):
 
 class SymNetDevice:
     def __init__(self, local_addr, remote_addr):
+        logger.debug('setup new symnet device')
         self.controllers = {}
         connect = Base.loop.create_datagram_endpoint(
             SymNetRawProtocol,
@@ -188,10 +216,12 @@ class SymNetDevice:
     async def _process_push_messages(self):
         while True:
             cs = await Queues.get_from_queue('symnet_controller_state')
+            logger.debug("received some pushed data - handover to the controller object")
             if cs['cn'] in self.controllers:
-                self.controllers[cs['cn']]._set_raw_value(cs['cv'], updateTime=True)
+                self.controllers[cs['cn']]._set_raw_value(cs['cv'])
 
     def define_controller(self, controller_number) -> SymNetController:
+        logger.debug('create new controller %d on symnet device', controller_number)
         controller_number = int(controller_number)
         controller = SymNetController(controller_number, self.protocol)
         self.controllers[controller_number] = controller
@@ -199,6 +229,7 @@ class SymNetDevice:
         return controller
 
     def define_selector(self, controller_number: int, selector_count: int) -> SymNetSelectorController:
+        logger.debug('create new selector %d on symnet device', controller_number)
         controller_number = int(controller_number)
         controller = SymNetSelectorController(controller_number, selector_count, self.protocol)
         self.controllers[controller_number] = controller
@@ -206,6 +237,7 @@ class SymNetDevice:
         return controller
 
     def define_button(self, controller_number) -> SymNetButtonController:
+        logger.debug('create new button %d on symnet device', controller_number)
         controller_number = int(controller_number)
         controller = SymNetButtonController(controller_number, self.protocol)
         self.controllers[controller_number] = controller
@@ -213,9 +245,9 @@ class SymNetDevice:
         return controller
 
     async def _cleanup(self):
-        Base.logger.debug('SymNetDevice awaiting cleanup')
+        logger.debug('SymNetDevice awaiting cleanup')
         await Base.cleanup.wait()
-        Base.logger.debug('SymNetDevice cancel process_task')
+        logger.debug('SymNetDevice cancel process_task')
         self._process_task.cancel()
-        Base.logger.debug('SymNetDevice close transport')
+        logger.debug('SymNetDevice close transport')
         self.transport.close()

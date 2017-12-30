@@ -1,7 +1,13 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 import asyncio
 import os
 import socket
 from bermudafunk import Base
+
+
 
 """
 This is based on the work of "D.S. Ljungmark, Modio AB", published under the GPLv3,
@@ -64,6 +70,7 @@ async def watchdog():
         await watchdog_ping()
         await asyncio.sleep(watchdog_sec * 0.9)
 
+
 async def cleanup():
     global watchdog_task, reader, writer
     print('awaiting cleanup')
@@ -80,6 +87,7 @@ def sd_message(message):
     if writer is None:
         async def empty():
             pass
+
         return asyncio.ensure_future(empty())
     """Send a message to the systemd bus/socket.
     message is expected to be bytes.
@@ -100,7 +108,7 @@ def ready():
     """Helper function to send a ready signal."""
     global ready_event
     message = b"READY=1"
-    Base.logger.debug("Signaling system ready")
+    logger.debug("Signaling system ready")
     result = sd_message(message)
     ready_event.set()
     return result

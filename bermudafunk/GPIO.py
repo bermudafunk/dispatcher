@@ -1,7 +1,11 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 import asyncio
 from RPi import GPIO
 
-from .Base import loop, logger
+from .Base import loop
 from . import Queues, Base
 
 _initialized = None
@@ -130,15 +134,15 @@ async def _process_event():
         something_executed = False
         if pin in buttons:
             if buttons[pin]['callback'] is not None:
-                print('callback will be called soon')
+                logger.debug('callback will be called soon')
                 loop.call_soon(buttons[pin]['callback'], int(pin))
                 something_executed = True
             if buttons[pin]['coroutine'] is not None:
-                print('coroutine scheduled as a task')
+                logger.debug('coroutine scheduled as a task')
                 loop.create_task(buttons[pin]['coroutine'](int(pin)))
                 something_executed = True
         if not something_executed:
-            print('No callback & no coroutine defined')
+            logger.debug('No callback & no coroutine defined')
 
 
 def _callback(pin):
