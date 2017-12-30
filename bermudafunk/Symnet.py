@@ -99,10 +99,12 @@ class SymNetController:
             await self._retrieve_current_state().future
         return self.raw_value
 
-    def _set_raw_value(self, value):
+    def _set_raw_value(self, value, updateTime=False):
         Base.logger.debug('set_raw_value called on {cn} with {cv}'.format(cn=self.cn, cv=value))
         old_value = self.raw_value
         self.raw_value = value
+        if updateTime:
+            self.raw_value_time = Base.loop.time()
         if old_value != value:
             for clb in self.obs:
                 asyncio.ensure_future(clb(self))
@@ -133,9 +135,8 @@ class SymNetController:
 
     def _retrieve_callback(self, data_str, m=None):
         if m is None:
-            raise Exception('Error executing GS2 command')
-        self.raw_value_time = Base.loop.time()
-        self._set_raw_value(int(m.group(1)))
+            raise Exception('Error executing GS2 command, controller {}'.format(self.cn))
+        self._set_raw_value(int(m.group(1)), updateTime=True)
 
 
 class SymNetSelectorController(SymNetController):
@@ -161,8 +162,8 @@ class SymNetButtonController(SymNetController):
         self._set_raw_value(0)
         await self._assure_current_state().future
 
-    def get(self):
-        return self._get_raw_value() > 0
+    async def get(self):
+        return await self._get_raw_value() > 0
 
     def set(self, state):
         if state:
@@ -188,7 +189,7 @@ class SymNetDevice:
         while True:
             cs = await Queues.get_from_queue('symnet_controller_state')
             if cs['cn'] in self.controllers:
-                self.controllers[cs['cn']]._set_raw_value(cs['cv'])
+                self.controllers[cs['cn']]._set_raw_value(cs['cv'], updateTime=True)
 
     def define_controller(self, controller_number) -> SymNetController:
         controller_number = int(controller_number)
