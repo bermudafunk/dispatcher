@@ -8,7 +8,9 @@ loop = asyncio.get_event_loop()
 loop.set_debug(config.DEBUG)
 
 if config.DEBUG:
-    logging.basicConfig(format='%(asctime)s : %(levelname)8s : %(name)20s : %(funcName)20s : %(lineno)4d : %(message)s', level=logging.DEBUG)
+    logging.basicConfig(format='%(asctime)s : %(levelname)8s : %(name)20s : %(funcName)20s : %(lineno)4d : %(message)s')
+    logging.getLogger('bermudafunk').setLevel(logging.DEBUG)
+    logging.getLogger('bermudafunk.Symnet').setLevel(logging.ERROR)
 
 logger = logging.getLogger(__name__)
 

@@ -52,16 +52,17 @@ if __name__ == '__main__':
     except:
         pass
 
-    device = Symnet.SymNetDevice(local_addr=(Base.config.myIp, Base.config.myPort), remote_addr=(Base.config.remoteIp, Base.config.remotePort))
+    device = Symnet.SymNetDevice(local_addr=(Base.config.myIp, Base.config.myPort),
+                                 remote_addr=(Base.config.remoteIp, Base.config.remotePort))
     onAirSwitch = device.define_selector(1, 8)
     monitorSelector = device.define_selector(2, 10)
     monitorButton1 = device.define_button(223)
     monitorButton2 = device.define_button(336)
 
 
-    async def clb(controller: Symnet.SymNetSelectorController):
+    async def clb(controller: Symnet.SymNetSelectorController, *args, **kwargs):
         current_position = await controller.get_position()
-        print('clb watch {}'.format(current_position))
+        print('clb watch {} {}'.format(controller.cn, current_position))
 
 
     onAirSwitch.add_obs(clb)
@@ -72,10 +73,10 @@ if __name__ == '__main__':
         import asyncio
         while not Base.cleanup.is_set():
             print("debugging o/")
-            oav = onAirSwitch.get_position()
-            msv = monitorSelector.get_position()
-            mb1v = monitorButton1.get()
-            mb2v = monitorButton2.get()
+            oav = Base.loop.create_task(onAirSwitch.get_position())
+            msv = Base.loop.create_task(monitorSelector.get_position())
+            mb1v = Base.loop.create_task(monitorButton1.pressed())
+            mb2v = Base.loop.create_task(monitorButton2.pressed())
             print(await oav)
             print(await msv)
             print(await mb1v)
@@ -88,8 +89,9 @@ if __name__ == '__main__':
         await Base.cleanup.wait()
         test_task.cancel()
 
-    test_task = Base.loop.create_task(test())
-    Base.cleanup_tasks.append(Base.loop.create_task(test_cleanup()))
+
+    # test_task = Base.loop.create_task(test())
+    # Base.cleanup_tasks.append(Base.loop.create_task(test_cleanup()))
 
     from aiohttp import web
 
@@ -98,6 +100,7 @@ if __name__ == '__main__':
 
     async def onAirSwitchGetHandler(request: web.Request):
         return web.Response(text="curr pos {}".format(await onAirSwitch.get_position()))
+
 
     async def onAirSwitchSetHandler(request: web.Request):
         pos = int(request.match_info['pos'])
@@ -123,6 +126,36 @@ if __name__ == '__main__':
         await handler.shutdown(1)
         await app.cleanup()
 
+
+    async def test_clocks():
+        import asyncio
+        import time
+        import logging
+
+        logger = logging.getLogger('clock_test')
+        logger.setLevel(logging.DEBUG)
+
+        time_async_pre, time_time_pre = Base.loop.time(), time.time()
+
+        while not Base.cleanup.is_set():
+            time_async, time_time = Base.loop.time(), time.time()
+
+            logger.debug('loop time diff: %s', time_async - time_async_pre)
+            logger.debug('time time diff: %s', time_time - time_time_pre)
+            logger.debug('diff of the diffs: %s', (time_async - time_async_pre) - (time_time - time_time_pre))
+
+            time_async_pre, time_time_pre = time_async, time_time
+
+            await asyncio.sleep(300)
+
+
+    async def test_clock_cleanup():
+        task = Base.loop.create_task(test_clocks())
+        await Base.cleanup.wait()
+        task.cancel()
+
+
+    Base.loop.create_task(test_clock_cleanup())
 
     Base.cleanup_tasks.append(Base.loop.create_task(web_app_cleanup()))
 
