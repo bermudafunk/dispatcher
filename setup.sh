@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 if [ ! -d env ]; then
-    virtualenv -p python3.5 env
+    python3 -m venv env
 fi
 
 source env/bin/activate
