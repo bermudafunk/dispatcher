@@ -1,12 +1,12 @@
+import asyncio
 import logging
 
-logger = logging.getLogger(__name__)
-
-import asyncio
 from RPi import GPIO
 
-from .Base import loop
-from . import Queues, Base
+from bermudafunk import base
+from bermudafunk.base import loop, queues
+
+logger = logging.getLogger(__name__)
 
 _initialized = None
 
@@ -85,7 +85,7 @@ def _setup():
         logger.debug('setup create process_event loop task')
         _initialized = loop.create_task(_process_event())
         logger.debug('setup create cleanup task')
-        Base.cleanup_tasks.append(loop.create_task(_cleanup()))
+        base.cleanup_tasks.append(loop.create_task(_cleanup()))
 
 
 def _check_pin(pin, usage):
@@ -100,7 +100,7 @@ def _check_pin(pin, usage):
 
 async def _cleanup():
     logger.debug('cleanup awaiting')
-    await Base.cleanup.wait()
+    await base.cleanup.wait()
     logger.debug('cleanup cancel process_event')
     _initialized.cancel()
     logger.debug('cleanup reset GPIO')
@@ -130,7 +130,7 @@ def remove_button(pin):
 async def _process_event():
     global buttons
     while True:
-        pin = await Queues.get_queue('gpio_raw').get()
+        pin = await queues.get_queue('gpio_raw').get()
         something_executed = False
         if pin in buttons:
             if buttons[pin]['callback'] is not None:
@@ -147,4 +147,4 @@ async def _process_event():
 
 def _callback(pin):
     logger.debug('Button press detected; put pin in queue %s' % (pin,))
-    loop.call_soon_threadsafe(asyncio.ensure_future, Queues.put_in_queue(str(pin), 'gpio_raw'))
+    loop.call_soon_threadsafe(asyncio.ensure_future, queues.put_in_queue(str(pin), 'gpio_raw'))

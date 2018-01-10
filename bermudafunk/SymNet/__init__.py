@@ -1,10 +1,11 @@
+import asyncio
 import logging
+import re
+
+from bermudafunk import base
+from bermudafunk.base import queues
 
 logger = logging.getLogger(__name__)
-
-import asyncio
-import re
-from bermudafunk import Base, Queues
 
 
 class SymNetRawProtocolCallback:
@@ -12,7 +13,7 @@ class SymNetRawProtocolCallback:
         self._callback = callback
         self.expected_lines = expected_lines
         self.regex = regex
-        self.future = Base.loop.create_future()
+        self.future = base.loop.create_future()
 
     def callback(self, *args, **kwargs):
         logger.debug("raw protocol callback called")
@@ -79,7 +80,7 @@ class SymNetRawProtocol(asyncio.DatagramProtocol):
                 logger.error("error in in the received line <%s>", line)
                 continue
 
-            asyncio.ensure_future(Queues.put_in_queue({
+            asyncio.ensure_future(queues.put_in_queue({
                 'cn': int(m.group(1)),
                 'cv': int(m.group(2))
             }, 'symnet_controller_state'))
@@ -106,7 +107,7 @@ class SymNetController:
 
         self.obs = []
 
-        Base.loop.run_until_complete(self._retrieve_current_state().future)
+        base.loop.run_until_complete(self._retrieve_current_state().future)
 
     def add_obs(self, clb):
         logger.debug("add a observer (%s) to controller %d", clb, self.cn)
@@ -118,7 +119,7 @@ class SymNetController:
 
     async def _get_raw_value(self):
         logger.debug('retrieve current value for controller %d', self.cn)
-        if Base.loop.time() - self.raw_value_time > self.value_timeout:
+        if base.loop.time() - self.raw_value_time > self.value_timeout:
             logger.debug('value timeout - refresh')
             await self._retrieve_current_state().future
         return self.raw_value
@@ -127,7 +128,7 @@ class SymNetController:
         logger.debug('set_raw_value called on %d with %d', self.cn, value)
         old_value = self.raw_value
         self.raw_value = value
-        self.raw_value_time = Base.loop.time()
+        self.raw_value_time = base.loop.time()
         if old_value != value:
             logger.debug("value has changed - notify observers")
             for clb in self.obs:
@@ -203,19 +204,19 @@ class SymNetDevice:
     def __init__(self, local_addr, remote_addr):
         logger.debug('setup new symnet device')
         self.controllers = {}
-        connect = Base.loop.create_datagram_endpoint(
+        connect = base.loop.create_datagram_endpoint(
             SymNetRawProtocol,
             local_addr=local_addr,
             remote_addr=remote_addr
         )
-        self.transport, self.protocol = Base.loop.run_until_complete(connect)
+        self.transport, self.protocol = base.loop.run_until_complete(connect)
 
-        self._process_task = Base.loop.create_task(self._process_push_messages())
-        Base.cleanup_tasks.append(Base.loop.create_task(self._cleanup()))
+        self._process_task = base.loop.create_task(self._process_push_messages())
+        base.cleanup_tasks.append(base.loop.create_task(self._cleanup()))
 
     async def _process_push_messages(self):
         while True:
-            cs = await Queues.get_from_queue('symnet_controller_state')
+            cs = await queues.get_from_queue('symnet_controller_state')
             logger.debug("received some pushed data - handover to the controller object")
             if cs['cn'] in self.controllers:
                 self.controllers[cs['cn']]._set_raw_value(cs['cv'])
@@ -246,7 +247,7 @@ class SymNetDevice:
 
     async def _cleanup(self):
         logger.debug('SymNetDevice awaiting cleanup')
-        await Base.cleanup.wait()
+        await base.cleanup.wait()
         logger.debug('SymNetDevice cancel process_task')
         self._process_task.cancel()
         logger.debug('SymNetDevice close transport')

@@ -3,7 +3,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from asyncio import Queue
-from .Base import loop
+from bermudafunk.base import loop
 
 queues = {}
 

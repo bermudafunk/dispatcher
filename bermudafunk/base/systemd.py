@@ -1,13 +1,11 @@
-import logging
-
-logger = logging.getLogger(__name__)
-
 import asyncio
+import logging
 import os
 import socket
-from bermudafunk import Base
 
+from bermudafunk import base
 
+logger = logging.getLogger(__name__)
 
 """
 This is based on the work of "D.S. Ljungmark, Modio AB", published under the GPLv3,
@@ -22,7 +20,7 @@ writer = None
 watchdog_sec = None
 watchdog_task = None
 
-ready_event = asyncio.Event(loop=Base.loop)
+ready_event = asyncio.Event(loop=base.loop)
 
 
 def setup(clean_environment=True):
@@ -51,7 +49,7 @@ def setup(clean_environment=True):
 
     sock.connect(address)
 
-    reader, writer = Base.loop.run_until_complete(asyncio.open_unix_connection(loop=Base.loop, sock=sock))
+    reader, writer = base.loop.run_until_complete(asyncio.open_unix_connection(loop=base.loop, sock=sock))
 
     """Return the time (in seconds) that we need to ping within."""
     val = os.environ.get("WATCHDOG_USEC", None)
@@ -59,8 +57,8 @@ def setup(clean_environment=True):
         watchdog_sec = None
     else:
         watchdog_sec = int(val) / 1000000
-        watchdog_task = Base.loop.create_task(watchdog())
-        Base.cleanup_tasks.append(Base.loop.create_task(cleanup()))
+        watchdog_task = base.loop.create_task(watchdog())
+        base.cleanup_tasks.append(base.loop.create_task(cleanup()))
 
 
 async def watchdog():
@@ -74,7 +72,7 @@ async def watchdog():
 async def cleanup():
     global watchdog_task, reader, writer
     print('awaiting cleanup')
-    await Base.cleanup.wait()
+    await base.cleanup.wait()
     print('Cleaning up start')
     watchdog_task.cancel()
     stop()

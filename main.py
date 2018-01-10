@@ -1,4 +1,5 @@
-from bermudafunk import Base, GPIO, Symnet, Systemd
+from bermudafunk import base, SymNet
+from bermudafunk.base import systemd
 
 
 class ClassDict(type):
@@ -45,22 +46,22 @@ class SwitchLogic:
 
 
 if __name__ == '__main__':
-    Base.logger.debug('Main Start')
+    base.logger.debug('Main Start')
 
     try:
-        Systemd.setup()
+        systemd.setup()
     except:
         pass
 
-    device = Symnet.SymNetDevice(local_addr=(Base.config.myIp, Base.config.myPort),
-                                 remote_addr=(Base.config.remoteIp, Base.config.remotePort))
+    device = SymNet.SymNetDevice(local_addr=(base.config.myIp, base.config.myPort),
+                                 remote_addr=(base.config.remoteIp, base.config.remotePort))
     onAirSwitch = device.define_selector(1, 8)
     monitorSelector = device.define_selector(2, 10)
     monitorButton1 = device.define_button(223)
     monitorButton2 = device.define_button(336)
 
 
-    async def clb(controller: Symnet.SymNetSelectorController, *args, **kwargs):
+    async def clb(controller: SymNet.SymNetSelectorController, *args, **kwargs):
         current_position = await controller.get_position()
         print('clb watch {} {}'.format(controller.cn, current_position))
 
@@ -71,12 +72,12 @@ if __name__ == '__main__':
 
     async def test():
         import asyncio
-        while not Base.cleanup.is_set():
+        while not base.cleanup.is_set():
             print("debugging o/")
-            oav = Base.loop.create_task(onAirSwitch.get_position())
-            msv = Base.loop.create_task(monitorSelector.get_position())
-            mb1v = Base.loop.create_task(monitorButton1.pressed())
-            mb2v = Base.loop.create_task(monitorButton2.pressed())
+            oav = base.loop.create_task(onAirSwitch.get_position())
+            msv = base.loop.create_task(monitorSelector.get_position())
+            mb1v = base.loop.create_task(monitorButton1.pressed())
+            mb2v = base.loop.create_task(monitorButton2.pressed())
             print(await oav)
             print(await msv)
             print(await mb1v)
@@ -86,12 +87,12 @@ if __name__ == '__main__':
 
 
     async def test_cleanup():
-        await Base.cleanup.wait()
+        await base.cleanup.wait()
         test_task.cancel()
 
 
-    # test_task = Base.loop.create_task(test())
-    # Base.cleanup_tasks.append(Base.loop.create_task(test_cleanup()))
+    # test_task = base.loop.create_task(test())
+    # base.cleanup_tasks.append(base.loop.create_task(test_cleanup()))
 
     from aiohttp import web
 
@@ -113,13 +114,13 @@ if __name__ == '__main__':
     app.router.add_get('/oas/{pos}', onAirSwitchSetHandler)
 
     handler = app.make_handler()
-    f = Base.loop.create_server(handler, '0.0.0.0', 8080)
-    srv = Base.loop.run_until_complete(f)
+    f = base.loop.create_server(handler, '0.0.0.0', 8080)
+    srv = base.loop.run_until_complete(f)
     print('serving on', srv.sockets[0].getsockname())
 
 
     async def web_app_cleanup():
-        await Base.cleanup.wait()
+        await base.cleanup.wait()
         srv.close()
         await srv.wait_closed()
         await app.shutdown()
@@ -135,10 +136,10 @@ if __name__ == '__main__':
         logger = logging.getLogger('clock_test')
         logger.setLevel(logging.DEBUG)
 
-        time_async_pre, time_time_pre = Base.loop.time(), time.time()
+        time_async_pre, time_time_pre = base.loop.time(), time.time()
 
-        while not Base.cleanup.is_set():
-            time_async, time_time = Base.loop.time(), time.time()
+        while not base.cleanup.is_set():
+            time_async, time_time = base.loop.time(), time.time()
 
             logger.debug('loop time diff: %s', time_async - time_async_pre)
             logger.debug('time time diff: %s', time_time - time_time_pre)
@@ -150,13 +151,13 @@ if __name__ == '__main__':
 
 
     async def test_clock_cleanup():
-        task = Base.loop.create_task(test_clocks())
-        await Base.cleanup.wait()
+        task = base.loop.create_task(test_clocks())
+        await base.cleanup.wait()
         task.cancel()
 
 
-    Base.loop.create_task(test_clock_cleanup())
+    base.loop.create_task(test_clock_cleanup())
 
-    Base.cleanup_tasks.append(Base.loop.create_task(web_app_cleanup()))
+    base.cleanup_tasks.append(base.loop.create_task(web_app_cleanup()))
 
-    Base.run_loop()
+    base.run_loop()
