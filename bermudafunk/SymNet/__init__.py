@@ -99,71 +99,71 @@ class SymNetController:
 
     def __init__(self, controller_number, protocol: SymNetRawProtocol):
         logger.debug('create new SymNetController with %d', controller_number)
-        self.cn = int(controller_number)
+        self.controller_number = int(controller_number)
         self.proto = protocol
 
         self.raw_value = 0
         self.raw_value_time = 0
 
-        self.obs = []
+        self.observer = []
 
         base.loop.run_until_complete(self._retrieve_current_state().future)
 
-    def add_obs(self, clb):
-        logger.debug("add a observer (%s) to controller %d", clb, self.cn)
-        return self.obs.append(clb)
+    def add_observer(self, callback):
+        logger.debug("add a observer (%s) to controller %d", callback, self.controller_number)
+        return self.observer.append(callback)
 
-    def rem_obs(self, clb):
-        logger.debug("remove a observer (%s) to controller %d", clb, self.cn)
-        return self.obs.remove(clb)
+    def remove_observer(self, callback):
+        logger.debug("remove a observer (%s) to controller %d", callback, self.controller_number)
+        return self.observer.remove(callback)
 
     async def _get_raw_value(self):
-        logger.debug('retrieve current value for controller %d', self.cn)
+        logger.debug('retrieve current value for controller %d', self.controller_number)
         if base.loop.time() - self.raw_value_time > self.value_timeout:
             logger.debug('value timeout - refresh')
             await self._retrieve_current_state().future
         return self.raw_value
 
     def _set_raw_value(self, value):
-        logger.debug('set_raw_value called on %d with %d', self.cn, value)
+        logger.debug('set_raw_value called on %d with %d', self.controller_number, value)
         old_value = self.raw_value
         self.raw_value = value
         self.raw_value_time = base.loop.time()
         if old_value != value:
             logger.debug("value has changed - notify observers")
-            for clb in self.obs:
+            for clb in self.observer:
                 asyncio.ensure_future(clb(self, old_value=old_value, new_value=value))
 
     def _assure_current_state(self):
-        logger.debug("assure current controller %d state to set on the symnet device", self.cn)
+        logger.debug("assure current controller %d state to set on the symnet device", self.controller_number)
         callback_obj = SymNetRawProtocolCallback(
             callback=self._assure_callback,
             expected_lines=1,
             regex='^(ACK)|(NAK)\r$'
         )
         self.proto.callback_queue.append(callback_obj)
-        self.proto.write('CS {cn:d} {cv:d}\r'.format(cn=self.cn, cv=self.raw_value))
+        self.proto.write('CS {cn:d} {cv:d}\r'.format(cn=self.controller_number, cv=self.raw_value))
         return callback_obj
 
     def _assure_callback(self, data_str, m=None):
         if m is None or m.group(1) == 'NAK':
             raise Exception(
-                'Unknown error occurred awaiting the acknowledge of setting controller number {:d}'.format(self.cn))
+                'Unknown error occurred awaiting the acknowledge of setting controller number {:d}'.format(self.controller_number))
 
     def _retrieve_current_state(self):
-        logger.debug("request current value from the symnet device for controller %d", self.cn)
+        logger.debug("request current value from the symnet device for controller %d", self.controller_number)
         callback_obj = SymNetRawProtocolCallback(
             callback=self._retrieve_callback,
             expected_lines=1,
-            regex='^' + str(self.cn) + ' ([0-9]{1,5})\r$'
+            regex='^' + str(self.controller_number) + ' ([0-9]{1,5})\r$'
         )
         self.proto.callback_queue.append(callback_obj)
-        self.proto.write('GS2 {:d}\r'.format(self.cn))
+        self.proto.write('GS2 {:d}\r'.format(self.controller_number))
         return callback_obj
 
     def _retrieve_callback(self, data_str, m=None):
         if m is None:
-            raise Exception('Error executing GS2 command, controller {}'.format(self.cn))
+            raise Exception('Error executing GS2 command, controller {}'.format(self.controller_number))
         self._set_raw_value(int(m.group(1)))
 
 
