@@ -1,2 +1,4 @@
 rpi.gpio
 aiohttp
+cchardet
+aiodns
