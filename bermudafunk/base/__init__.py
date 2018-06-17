@@ -7,8 +7,9 @@ import config
 loop = asyncio.get_event_loop()
 loop.set_debug(config.DEBUG)
 
+logging.basicConfig(format='%(asctime)s : %(levelname)8s : %(name)30s : %(funcName)-20s : %(lineno)4d : %(message)s')
+
 if config.DEBUG:
-    logging.basicConfig(format='%(asctime)s : %(levelname)8s : %(name)30s : %(funcName)-20s : %(lineno)4d : %(message)s')
     logging.getLogger('bermudafunk').setLevel(logging.DEBUG)
     logging.getLogger('bermudafunk.SymNet').setLevel(logging.ERROR)
 
@@ -44,3 +45,13 @@ def stop():
     logger.debug("stopping the application, set cleanup event, stop loop")
     cleanup.set()
     loop.stop()
+
+
+def start_cleanup_aware_coro(org_func):
+    async def cleanup_task():
+        await cleanup.wait()
+        main_task.cancel()
+
+    main_task = loop.create_task(org_func())
+    cleanup_task = loop.create_task(cleanup_task())
+    cleanup_tasks.append(cleanup_task)
