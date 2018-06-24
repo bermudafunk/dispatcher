@@ -148,7 +148,8 @@ class SymNetController:
     def _assure_callback(self, data_str, m=None):
         if m is None or m.group(1) == 'NAK':
             raise Exception(
-                'Unknown error occurred awaiting the acknowledge of setting controller number {:d}'.format(self.controller_number))
+                'Unknown error occurred awaiting the acknowledge of setting controller number {:d}'.format(
+                    self.controller_number))
 
     def _retrieve_current_state(self):
         logger.debug("request current value from the symnet device for controller %d", self.controller_number)
@@ -247,7 +248,7 @@ class SymNetDevice:
 
     async def _cleanup(self):
         logger.debug('SymNetDevice awaiting cleanup')
-        await base.cleanup.wait()
+        await base.cleanup_event.wait()
         logger.debug('SymNetDevice cancel process_task')
         self._process_task.cancel()
         logger.debug('SymNetDevice close transport')

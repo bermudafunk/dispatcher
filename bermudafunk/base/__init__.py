@@ -15,13 +15,11 @@ if config.DEBUG:
 
 logger = logging.getLogger(__name__)
 
-cleanup = asyncio.Event(loop=loop)
+cleanup_event = asyncio.Event(loop=loop)
 cleanup_tasks = []
 
 
 def run_loop():
-    global loop
-
     logger.debug("Install signal handlers on loop")
     for sig_name in ('SIGINT', 'SIGTERM', 'SIGABRT'):
         loop.add_signal_handler(getattr(signal, sig_name), stop)
@@ -43,13 +41,13 @@ def run_loop():
 
 def stop():
     logger.debug("stopping the application, set cleanup event, stop loop")
-    cleanup.set()
+    cleanup_event.set()
     loop.stop()
 
 
 def start_cleanup_aware_coro(org_func):
     async def cleanup_task():
-        await cleanup.wait()
+        await cleanup_event.wait()
         main_task.cancel()
 
     main_task = loop.create_task(org_func())

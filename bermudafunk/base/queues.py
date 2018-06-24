@@ -1,9 +1,9 @@
 import logging
 
-logger = logging.getLogger(__name__)
-
 from asyncio import Queue
 from bermudafunk.base import loop
+
+logger = logging.getLogger(__name__)
 
 queues = {}
 

@@ -40,12 +40,7 @@ def setup(clean_environment=True):
     if address[0] == "@":
         address = "\0" + address[1:]
 
-    # SOCK_CLOEXEC was added in Python 3.2 and requires Linux >= 2.6.27.
-    # It means "close this socket after fork/exec()
-    try:
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM | socket.SOCK_CLOEXEC)
-    except AttributeError:
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM | socket.SOCK_CLOEXEC)
 
     sock.connect(address)
 
@@ -66,38 +61,34 @@ async def watchdog():
     await ready_event.wait()
     while True:
         await watchdog_ping()
-        await asyncio.sleep(watchdog_sec * 0.9)
+        await asyncio.sleep(watchdog_sec * 0.9, loop=base.loop)
 
 
 async def cleanup():
-    global watchdog_task, reader, writer
-    print('awaiting cleanup')
-    await base.cleanup.wait()
-    print('Cleaning up start')
+    global watchdog_task, sock
+    logger.info('awaiting cleanup')
+    await base.cleanup_event.wait()
+    logger.info('Cleaning up start')
     watchdog_task.cancel()
     stop()
     sock.close()
-    print('Cleaning up finished')
+    logger.info('Cleaning up finished')
 
 
-def sd_message(message):
+def sd_message(message: bytes):
     global writer
     if writer is None:
         async def empty():
             pass
 
-        return asyncio.ensure_future(empty())
-    """Send a message to the systemd bus/socket.
-    message is expected to be bytes.
-    """
+        return asyncio.ensure_future(empty(), loop=base.loop)
     assert isinstance(message, bytes)
     writer.write(message)
-    return asyncio.ensure_future(writer.drain())
+    return asyncio.ensure_future(writer.drain(), loop=base.loop)
 
 
 def watchdog_ping():
     """Helper function to send a watchdog ping."""
-    global sock, reader, writer, watchdog_sec
     message = b"WATCHDOG=1"
     return sd_message(message)
 
@@ -114,13 +105,11 @@ def ready():
 
 def stop():
     """Helper function to signal service stopping."""
-    global sock, reader, writer, watchdog_sec
     message = b"STOPPING=1"
     return sd_message(message)
 
 
 def status(message):
     """Helper function to update the service status."""
-    global sock, reader, writer, watchdog_sec
     message = ("STATUS=%s" % message).encode('utf8')
     return sd_message(message)

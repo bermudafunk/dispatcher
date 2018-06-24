@@ -100,7 +100,7 @@ def _check_pin(pin, usage):
 
 async def _cleanup():
     logger.debug('cleanup awaiting')
-    await base.cleanup.wait()
+    await base.cleanup_event.wait()
     logger.debug('cleanup cancel process_event')
     _initialized.cancel()
     logger.debug('cleanup reset GPIO')
