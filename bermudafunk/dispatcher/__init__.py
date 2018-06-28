@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import logging
 import time
+import typing
 from collections import namedtuple
 
 import bermudafunk.SymNet
@@ -13,6 +14,8 @@ DispatcherStudioDefinition = namedtuple('DispatcherStudioDefinition', ['studio',
 
 
 class DispatcherStudio:
+    names = {}  # type: typing.Dict[str, DispatcherStudio]
+
     def __init__(self,
                  name: str,
                  takeover_button_pin: int = None,
@@ -23,6 +26,9 @@ class DispatcherStudio:
                  immediate_led: GPIO.Led = None
                  ):
         self._name = name
+        if name in DispatcherStudio.names.keys():
+            raise ValueError('name already used %s' % name)
+        DispatcherStudio.names[name] = self
 
         self._takeover_button_pin = None
         self._release_button_pin = None
@@ -144,7 +150,7 @@ class Dispatcher:
     def __init__(self,
                  symnet_controller: bermudafunk.SymNet.SymNetSelectorController,
                  automat_selector_value: int,
-                 studio_mapping
+                 studio_mapping: typing.List[DispatcherStudioDefinition]
                  ):
 
         self.immediate_state_time = 5 * 60  # seconds
@@ -172,7 +178,7 @@ class Dispatcher:
         self._studios = []
         self._studios_to_selector_value = {}
         self._selector_value_to_studio = {}
-        for studio_def in studio_mapping:  # type: DispatcherStudioDefinition
+        for studio_def in studio_mapping:
             self._studios.append(studio_def.studio)
             self._studios_to_selector_value[studio_def.studio] = studio_def.selector_value
             self._selector_value_to_studio[studio_def.selector_value] = studio_def.studio
