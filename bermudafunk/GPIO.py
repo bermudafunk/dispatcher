@@ -47,14 +47,13 @@ class Led:
 
     def set_state(self, new_state, force=False, blink_freq=2):
         if new_state not in self.STATES:
-            raise Exception('Unknown state %s' % new_state)
+            raise ValueError('Unknown state %s' % new_state)
 
         self.blink_freq = blink_freq
 
         if self.state == new_state and not force:
             return  # Same state, nothing to change
 
-        old_state = self.state
         self.state = new_state
 
         if self._blink_task is not None:
@@ -130,7 +129,7 @@ def remove_button(pin):
 async def _process_event():
     global buttons
     while True:
-        pin = await queues.get_queue('gpio_raw').get()
+        pin = await queues.get_queue('gpio_pin_events').get()
         something_executed = False
         if pin in buttons:
             if buttons[pin]['callback'] is not None:
@@ -147,4 +146,4 @@ async def _process_event():
 
 def _callback(pin):
     logger.debug('Button press detected; put pin in queue %s' % (pin,))
-    loop.call_soon_threadsafe(asyncio.ensure_future, queues.put_in_queue(str(pin), 'gpio_raw'))
+    loop.call_soon_threadsafe(asyncio.ensure_future, queues.put_in_queue(str(pin), 'gpio_pin_events'))

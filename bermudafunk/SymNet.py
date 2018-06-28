@@ -169,16 +169,21 @@ class SymNetController:
 
 
 class SymNetSelectorController(SymNetController):
-    def __init__(self, controller_number, selector_count, protocol):
+    def __init__(self, controller_number: int, selector_count: int, protocol: SymNetRawProtocol):
         super().__init__(controller_number, protocol)
 
-        self.sc = int(selector_count)
+        self._sc = int(selector_count)
+
+    @property
+    def selector_count(self) -> int:
+        return self._sc
 
     async def get_position(self):
-        return int(round(await self._get_raw_value() / 65535 * (self.sc - 1) + 1))
+        return int(round(await self._get_raw_value() / 65535 * (self.selector_count - 1) + 1))
 
     async def set_position(self, position):
-        self._set_raw_value(int(round((position - 1) / (self.sc - 1) * 65535)))
+        assert 1 <= position <= self.selector_count
+        self._set_raw_value(int(round((position - 1) / (self.selector_count - 1) * 65535)))
         await self._assure_current_state().future
 
 
@@ -202,13 +207,13 @@ class SymNetButtonController(SymNetController):
 
 
 class SymNetDevice:
-    def __init__(self, local_addr, remote_addr):
+    def __init__(self, local_address, remote_address):
         logger.debug('setup new symnet device')
         self.controllers = {}
         connect = base.loop.create_datagram_endpoint(
             SymNetRawProtocol,
-            local_addr=local_addr,
-            remote_addr=remote_addr
+            local_addr=local_address,
+            remote_addr=remote_address
         )
         self.transport, self.protocol = base.loop.run_until_complete(connect)
 
