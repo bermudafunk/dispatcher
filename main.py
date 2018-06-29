@@ -2,6 +2,7 @@ import bermudafunk.dispatcher
 from bermudafunk import base
 from bermudafunk.SymNet import SymNetDevice
 from bermudafunk.base import systemd
+from bermudafunk.dispatcher import web
 
 if __name__ == '__main__':
     base.logger.debug('Main Start')
@@ -27,5 +28,7 @@ if __name__ == '__main__':
             bermudafunk.dispatcher.DispatcherStudioDefinition(studio=af_2, selector_value=3),
         ]
     )
+
+    bermudafunk.base.start_cleanup_aware_coro(web.run)
 
     base.run_loop()
