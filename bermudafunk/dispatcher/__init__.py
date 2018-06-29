@@ -8,7 +8,6 @@ from collections import namedtuple
 
 import bermudafunk.SymNet
 from bermudafunk import GPIO, base
-from bermudafunk.base.queues import get_queue
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +51,7 @@ class Studio:
         self._release_led = release_led
         self._immediate_led = immediate_led
 
-        self.dispatcher_event_queue_name = None
+        self.dispatcher_button_event_queue = None  # type: typing.Optional[asyncio.Queue]
 
     def __del__(self):
         self.takeover_button_pin = None
@@ -77,7 +76,7 @@ class Studio:
         self._takeover_button_pin = new_pin
 
         if new_pin is not None:
-            GPIO.register_button(new_pin, callback=self._gpio_button_callback)
+            GPIO.register_button(new_pin, coroutine=self._gpio_button_coroutine)
 
     @property
     def release_button_pin(self) -> int:
@@ -93,7 +92,7 @@ class Studio:
         self._release_button_pin = new_pin
 
         if new_pin is not None:
-            GPIO.register_button(new_pin, callback=self._gpio_button_callback)
+            GPIO.register_button(new_pin, coroutine=self._gpio_button_coroutine)
 
     @property
     def immediate_button_pin(self) -> int:
@@ -109,7 +108,7 @@ class Studio:
         self._immediate_button_pin = new_pin
 
         if new_pin is not None:
-            GPIO.register_button(new_pin, callback=self._gpio_button_callback)
+            GPIO.register_button(new_pin, coroutine=self._gpio_button_coroutine)
 
     @property
     def takeover_led(self) -> GPIO.Led:
@@ -123,7 +122,7 @@ class Studio:
     def immediate_led(self) -> GPIO.Led:
         return self._immediate_led
 
-    def _gpio_button_callback(self, pin):
+    async def _gpio_button_coroutine(self, pin):
         event = None
         if pin == self._takeover_button_pin:
             event = ButtonEvent(self, Button.takeover)
@@ -132,22 +131,11 @@ class Studio:
         elif pin == self._immediate_button_pin:
             event = ButtonEvent(self, Button.immediate)
 
-        if event and self.dispatcher_event_queue_name:
-            base.loop.create_task(get_queue(self.dispatcher_event_queue_name).put(event))
+        if event and self.dispatcher_button_event_queue:
+            await self.dispatcher_button_event_queue.put(event)
 
 
-class ButtonEvent:
-    def __init__(self, studio: Studio, button: Button) -> None:
-        self._studio = studio
-        self._button = button
-
-    @property
-    def studio(self) -> Studio:
-        return self._studio
-
-    @property
-    def button(self) -> Button:
-        return self._button
+ButtonEvent = typing.NamedTuple('ButtonEvent', [('studio', Studio), ('button', Button)])
 
 
 class Dispatcher:
@@ -172,12 +160,12 @@ class Dispatcher:
 
         self._immediate_release_lock = asyncio.Lock(loop=base.loop)
 
-        self._dispatcher_event_queue_name = 'dispatcher_event_queue'
-
         self._automat_studio = Studio('automat')
         studio_mapping = list(studio_mapping) + [
             DispatcherStudioDefinition(studio=self._automat_studio, selector_value=automat_selector_value)
         ]
+
+        self._dispatcher_button_event_queue = asyncio.Queue(maxsize=1, loop=base.loop)
 
         self._studios = []  # type: typing.List[Studio]
         self._studios_to_selector_value = {}  # type: typing.Dict[Studio, int]
@@ -186,7 +174,7 @@ class Dispatcher:
             self._studios.append(studio_def.studio)
             self._studios_to_selector_value[studio_def.studio] = studio_def.selector_value
             self._selector_value_to_studio[studio_def.selector_value] = studio_def.studio
-            studio_def.studio.dispatcher_event_queue_name = self._dispatcher_event_queue_name
+            studio_def.studio.dispatcher_button_event_queue = self._dispatcher_button_event_queue
 
         self._on_air_studio = self._automat_studio
 
@@ -203,7 +191,7 @@ class Dispatcher:
 
     async def _process_studio_button_events(self):
         while True:
-            event = await get_queue(self._dispatcher_event_queue_name).get()  # type: ButtonEvent
+            event = await self._dispatcher_button_event_queue.get()  # type: ButtonEvent
 
             await self._change_state(event)
 
@@ -406,7 +394,7 @@ class Dispatcher:
             await asyncio.sleep(1)
 
     @staticmethod
-    def __calc_next_hour_timestamp(minutes=9, seconds=0):
+    def __calc_next_hour_timestamp(minutes=0, seconds=0):
         next_datetime = datetime.datetime.now().replace(minute=minutes, second=seconds) + datetime.timedelta(hours=1)
         next_timestamp = next_datetime.timestamp()
         if next_timestamp - time.time() > 3600:

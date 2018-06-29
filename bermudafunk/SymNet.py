@@ -1,11 +1,14 @@
 import asyncio
 import logging
 import re
+import typing
 
 from bermudafunk import base
-from bermudafunk.base import queues
 
 logger = logging.getLogger(__name__)
+
+SymNetRawControllerState = typing.NamedTuple('SymNetRawControllerState',
+                                             [('controller_number', int), ('controller_value', int)])
 
 
 class SymNetRawProtocolCallback:
@@ -25,10 +28,11 @@ class SymNetRawProtocolCallback:
 
 
 class SymNetRawProtocol(asyncio.DatagramProtocol):
-    def __init__(self):
+    def __init__(self, state_queue: asyncio.Queue):
         logger.debug("init a SymNetRawProtocol")
         self.transport = None
         self.callback_queue = []
+        self.state_queue = state_queue
 
     def connection_made(self, transport):
         logger.debug("connection established")
@@ -80,10 +84,10 @@ class SymNetRawProtocol(asyncio.DatagramProtocol):
                 logger.error("error in in the received line <%s>", line)
                 continue
 
-            asyncio.ensure_future(queues.put_in_queue({
-                'cn': int(m.group(1)),
-                'cv': int(m.group(2))
-            }, 'symnet_controller_state'))
+            asyncio.ensure_future(self.state_queue.put(SymNetRawControllerState(
+                controller_number=int(m.group(1)),
+                controller_value=int(m.group(2))
+            )))
 
     def error_received(self, exc):
         logger.error('Error received %s', exc)
@@ -208,10 +212,15 @@ class SymNetButtonController(SymNetController):
 
 class SymNetDevice:
     def __init__(self, local_address, remote_address):
+        self._state_queue = asyncio.Queue(loop=base.loop)
+
+        def create_protocol() -> asyncio.DatagramProtocol:
+            return SymNetRawProtocol(state_queue=self._state_queue)
+
         logger.debug('setup new symnet device')
         self.controllers = {}
         connect = base.loop.create_datagram_endpoint(
-            SymNetRawProtocol,
+            create_protocol,
             local_addr=local_address,
             remote_addr=remote_address
         )
@@ -222,10 +231,10 @@ class SymNetDevice:
 
     async def _process_push_messages(self):
         while True:
-            cs = await queues.get_from_queue('symnet_controller_state')
+            cs = await self._state_queue.get()  # type: SymNetawControllerState
             logger.debug("received some pushed data - handover to the controller object")
-            if cs['cn'] in self.controllers:
-                self.controllers[cs['cn']]._set_raw_value(cs['cv'])
+            if cs.controller_number in self.controllers:
+                self.controllers[cs.controller_number]._set_raw_value(cs.controller_value)
 
     def define_controller(self, controller_number) -> SymNetController:
         logger.debug('create new controller %d on symnet device', controller_number)

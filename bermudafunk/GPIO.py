@@ -1,33 +1,37 @@
 import asyncio
+import enum
 import logging
 
 from RPi import GPIO
 
 from bermudafunk import base
-from bermudafunk.base import loop, queues
+from bermudafunk.base import loop
 
 logger = logging.getLogger(__name__)
 
 _initialized = None
 
-buttons = {}
-leds = {}
+_buttons = {}
+_leds = {}
 
-used_pins = {}
+_used_pins = {}
+
+_pin_events = asyncio.Queue(loop=base.loop)
+
+
+class LedState(enum.Enum):
+    OFF = 'off'
+    ON = 'on'
+    BLINK = 'blink'
 
 
 class Led:
-    STATE_OFF = 'off'
-    STATE_ON = 'on'
-    STATE_BLINK = 'blink'
-    STATES = [STATE_OFF, STATE_ON, STATE_BLINK]
-
     def __init__(self, pin):
-        global leds
-        leds[str(pin)] = self
+        global _leds
+        _leds[str(pin)] = self
 
         self.pin = int(pin)
-        self.state = self.STATE_OFF
+        self.state = LedState.OFF
         self.blink_freq = 2
 
         self._blink_task = None
@@ -45,10 +49,7 @@ class Led:
     def get_state(self):
         return self.state
 
-    def set_state(self, new_state, force=False, blink_freq=2):
-        if new_state not in self.STATES:
-            raise ValueError('Unknown state %s' % new_state)
-
+    def set_state(self, new_state: LedState, force=False, blink_freq=2):
         self.blink_freq = blink_freq
 
         if self.state == new_state and not force:
@@ -60,11 +61,11 @@ class Led:
             self._blink_task.cancel()
             self._blink_task = None
 
-        if new_state is self.STATE_ON:
+        if new_state is LedState.ON:
             GPIO.output(self.pin, GPIO.HIGH)
-        elif new_state is self.STATE_OFF:
+        elif new_state is LedState.OFF:
             GPIO.output(self.pin, GPIO.LOW)
-        elif new_state is self.STATE_BLINK:
+        elif new_state is LedState.BLINK:
             self._blink_task = loop.create_task(self._blink())
 
     async def _blink(self):
@@ -88,13 +89,13 @@ def _setup():
 
 
 def _check_pin(pin, usage):
-    global used_pins
+    global _used_pins
     pin = int(pin)
-    if pin not in used_pins:
-        used_pins[pin] = usage
-    if pin in used_pins and used_pins[pin] == usage:
+    if pin not in _used_pins:
+        _used_pins[pin] = usage
+    if pin in _used_pins and _used_pins[pin] == usage:
         return True
-    raise Exception('pin %s already used as %s instead of %s' % (pin, used_pins[pin], usage))
+    raise Exception('pin %s already used as %s instead of %s' % (pin, _used_pins[pin], usage))
 
 
 async def _cleanup():
@@ -107,38 +108,38 @@ async def _cleanup():
 
 
 def register_button(pin, callback=None, coroutine=None, override=False, **kwargs):
-    global buttons
+    global _buttons
     _setup()
     pin = int(pin)
-    if not override and pin in buttons:
+    if not override and pin in _buttons:
         logger.debug('register_button override not forced so do not override')
         return False
     logger.debug('register_button %s', pin)
     _check_pin(pin, 'button')
     GPIO.setup(pin, GPIO.IN, **kwargs)
     GPIO.add_event_detect(pin, GPIO.RISING, callback=_callback, bouncetime=300)
-    buttons[str(pin)] = {'pin': pin, 'callback': callback, 'coroutine': coroutine}
+    _buttons[str(pin)] = {'pin': pin, 'callback': callback, 'coroutine': coroutine}
 
 
 def remove_button(pin):
-    global buttons
+    global _buttons
     GPIO.remove_event_detect(pin)
-    del buttons[str(pin)]
+    del _buttons[str(pin)]
 
 
 async def _process_event():
-    global buttons
+    global _buttons
     while True:
-        pin = await queues.get_queue('gpio_pin_events').get()
+        pin = await _pin_events.get()
         something_executed = False
-        if pin in buttons:
-            if buttons[pin]['callback'] is not None:
+        if pin in _buttons:
+            if _buttons[pin]['callback'] is not None:
                 logger.debug('callback will be called soon')
-                loop.call_soon(buttons[pin]['callback'], int(pin))
+                loop.call_soon(_buttons[pin]['callback'], int(pin))
                 something_executed = True
-            if buttons[pin]['coroutine'] is not None:
+            if _buttons[pin]['coroutine'] is not None:
                 logger.debug('coroutine scheduled as a task')
-                loop.create_task(buttons[pin]['coroutine'](int(pin)))
+                loop.create_task(_buttons[pin]['coroutine'](int(pin)))
                 something_executed = True
         if not something_executed:
             logger.debug('No callback & no coroutine defined')
@@ -146,4 +147,4 @@ async def _process_event():
 
 def _callback(pin):
     logger.debug('Button press detected; put pin in queue %s' % (pin,))
-    loop.call_soon_threadsafe(asyncio.ensure_future, queues.put_in_queue(str(pin), 'gpio_pin_events'))
+    loop.call_soon_threadsafe(asyncio.ensure_future, _pin_events.put(str(pin)))
