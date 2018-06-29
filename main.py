@@ -16,8 +16,8 @@ if __name__ == '__main__':
 
     main_selector = device.define_selector(1, 8)
 
-    af_1 = bermudafunk.dispatcher.DispatcherStudio('af_1')
-    af_2 = bermudafunk.dispatcher.DispatcherStudio('af_2')
+    af_1 = bermudafunk.dispatcher.Studio('af_1')
+    af_2 = bermudafunk.dispatcher.Studio('af_2')
 
     dispatcher = bermudafunk.dispatcher.Dispatcher(
         symnet_controller=main_selector,

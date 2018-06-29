@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import enum
 import logging
 import time
 import typing
@@ -10,11 +11,20 @@ from bermudafunk import GPIO, base
 from bermudafunk.base.queues import get_queue
 
 logger = logging.getLogger(__name__)
+
+
+@enum.unique
+class Button(enum.Enum):
+    takeover = 'takeover'
+    release = 'release'
+    immediate = 'immediate'
+
+
 DispatcherStudioDefinition = namedtuple('DispatcherStudioDefinition', ['studio', 'selector_value'])
 
 
-class DispatcherStudio:
-    names = {}  # type: typing.Dict[str, DispatcherStudio]
+class Studio:
+    names = {}  # type: typing.Dict[str, Studio]
 
     def __init__(self,
                  name: str,
@@ -26,9 +36,9 @@ class DispatcherStudio:
                  immediate_led: GPIO.Led = None
                  ):
         self._name = name
-        if name in DispatcherStudio.names.keys():
+        if name in Studio.names.keys():
             raise ValueError('name already used %s' % name)
-        DispatcherStudio.names[name] = self
+        Studio.names[name] = self
 
         self._takeover_button_pin = None
         self._release_button_pin = None
@@ -116,33 +126,27 @@ class DispatcherStudio:
     def _gpio_button_callback(self, pin):
         event = None
         if pin == self._takeover_button_pin:
-            event = DispatcherButtonEvent(self, DispatcherButtonEvent.BUTTON_TAKEOVER)
+            event = ButtonEvent(self, Button.takeover)
         elif pin == self._release_button_pin:
-            event = DispatcherButtonEvent(self, DispatcherButtonEvent.BUTTON_RELEASE)
+            event = ButtonEvent(self, Button.release)
         elif pin == self._immediate_button_pin:
-            event = DispatcherButtonEvent(self, DispatcherButtonEvent.BUTTON_IMMEDIATE)
+            event = ButtonEvent(self, Button.immediate)
 
         if event and self.dispatcher_event_queue_name:
             base.loop.create_task(get_queue(self.dispatcher_event_queue_name).put(event))
 
 
-class DispatcherButtonEvent:
-    BUTTON_TAKEOVER = 'takeover'
-    BUTTON_RELEASE = 'release'
-    BUTTON_IMMEDIATE = 'immediate'
-    BUTTONS = [BUTTON_TAKEOVER, BUTTON_RELEASE, BUTTON_IMMEDIATE]
-
-    def __init__(self, studio: DispatcherStudio, button: str) -> None:
-        assert button in DispatcherButtonEvent.BUTTONS
+class ButtonEvent:
+    def __init__(self, studio: Studio, button: Button) -> None:
         self._studio = studio
         self._button = button
 
     @property
-    def studio(self) -> DispatcherStudio:
+    def studio(self) -> Studio:
         return self._studio
 
     @property
-    def button(self) -> str:
+    def button(self) -> Button:
         return self._button
 
 
@@ -158,26 +162,26 @@ class Dispatcher:
 
         self._symnet_controller = symnet_controller
 
-        self._takeover_state_value = None
-        self._release_state_value = None
-        self._immediate_state_value = None
+        self._takeover_state_value = None  # type: typing.Optional[Studio]
+        self._release_state_value = None  # type: typing.Optional[Studio]
+        self._immediate_state_value = None  # type: typing.Optional[Studio]
 
-        self._hourly_timer = None
-        self._immediate_state_timer = None
-        self._immediate_release_timer = None
+        self._hourly_timer = None  # type: typing.Optional[asyncio.Task]
+        self._immediate_state_timer = None  # type: typing.Optional[asyncio.Task]
+        self._immediate_release_timer = None  # type: typing.Optional[asyncio.Task]
 
         self._immediate_release_lock = asyncio.Lock(loop=base.loop)
 
         self._dispatcher_event_queue_name = 'dispatcher_event_queue'
 
-        self._automat_studio = DispatcherStudio('automat')
+        self._automat_studio = Studio('automat')
         studio_mapping = list(studio_mapping) + [
             DispatcherStudioDefinition(studio=self._automat_studio, selector_value=automat_selector_value)
         ]
 
-        self._studios = []
-        self._studios_to_selector_value = {}
-        self._selector_value_to_studio = {}
+        self._studios = []  # type: typing.List[Studio]
+        self._studios_to_selector_value = {}  # type: typing.Dict[Studio, int]
+        self._selector_value_to_studio = {}  # type: typing.Dict[int, Studio]
         for studio_def in studio_mapping:
             self._studios.append(studio_def.studio)
             self._studios_to_selector_value[studio_def.studio] = studio_def.selector_value
@@ -199,7 +203,7 @@ class Dispatcher:
 
     async def _process_studio_button_events(self):
         while True:
-            event = await get_queue(self._dispatcher_event_queue_name).get()  # type: DispatcherButtonEvent
+            event = await get_queue(self._dispatcher_event_queue_name).get()  # type: ButtonEvent
 
             await self._change_state(event)
 
@@ -207,11 +211,11 @@ class Dispatcher:
 
             self._audit_state()
 
-    async def _change_state(self, event: DispatcherButtonEvent):
+    async def _change_state(self, event: ButtonEvent):
         # Zustand: Automation on Air
         if self._on_air_studio == self._automat_studio:
             # Studio X drückt „Übernahme“
-            if event.button == DispatcherButtonEvent.BUTTON_TAKEOVER:
+            if event.button is Button.takeover:
                 # → nicht „Sofort-Status“
                 if self._immediate_state_value is None:
                     # → noch nicht von anderswo angefordert
@@ -228,7 +232,7 @@ class Dispatcher:
                     await self._do_immediate_takeover(event.studio)
 
             # Studio X drückt „Freigabe“
-            elif event.button == DispatcherButtonEvent.BUTTON_RELEASE:
+            elif event.button is Button.release:
                 # → Rücksetzung aller eigenen Anforderungen (Übernahme/ Sofort-Status)
                 if self._takeover_state_value == event.studio:
                     self._takeover_state_value = None
@@ -240,7 +244,7 @@ class Dispatcher:
                     self._assure_hourly_timer()
 
             # Studio X drückt „Sofort“
-            elif event.button == DispatcherButtonEvent.BUTTON_IMMEDIATE:
+            elif event.button is Button.immediate:
                 # → Sofort-Status war noch nicht gesetzt
                 if self._immediate_state_value is None:
                     # → Sofort-Status wird für das eigene Studio für die Dauer von 5 Minuten gesetzt
@@ -258,7 +262,7 @@ class Dispatcher:
         # Zustand: Studio X ist on Air und drückt Buttons
         elif self._on_air_studio == event.studio:
             # Studio X drückt „Übernahme“
-            if event.button == DispatcherButtonEvent.BUTTON_TAKEOVER:
+            if event.button is Button.takeover:
                 # → Wenn Freigabe oder Sofort-Freigabe von uns schon erteilt
                 if self._release_state_value == event.studio:
                     # → Noch keine andere Übernahme-Anforderung
@@ -267,7 +271,7 @@ class Dispatcher:
                         self._release_state_value = None
 
             # Studio X drückt „Freigabe“
-            elif event.button == DispatcherButtonEvent.BUTTON_RELEASE:
+            elif event.button is Button.release:
                 # → Wenn kein Sofort-Status gesetzt
                 if self._immediate_state_value is None:
                     # → Wenn noch nicht Freigabe erteilt
@@ -296,7 +300,7 @@ class Dispatcher:
                         self._assure_hourly_timer()
 
             # Studio X drück „Sofort-Button“
-            elif event.button == DispatcherButtonEvent.BUTTON_IMMEDIATE:
+            elif event.button is Button.immediate:
                 # → Wenn kein Sofort-Status gesetzt ist
                 if self._immediate_state_value is None:
                     # → Sofort-Status setzen
@@ -312,7 +316,7 @@ class Dispatcher:
         # Zustand: Studio X ist on Air und Studio Y drückt Buttons
         elif self._on_air_studio != event.studio:
             # Studio Y drückt „Übernahme“
-            if event.button == DispatcherButtonEvent.BUTTON_TAKEOVER:
+            if event.button is Button.takeover:
                 # → Wenn Sofort-Freigabe aktiviert ist
                 if self._release_state_value == self._on_air_studio and self._immediate_state_value == self._on_air_studio:
                     # → Sofortige Übernahme
@@ -334,7 +338,7 @@ class Dispatcher:
     def _audit_state(self):
         pass  # TODO
 
-    async def _switch_to_studio(self, studio: DispatcherStudio):
+    async def _switch_to_studio(self, studio: Studio):
         logger.info('switch to studio %s', studio.name)
         self._on_air_studio = studio
         await self._set_current_state()
@@ -344,7 +348,7 @@ class Dispatcher:
         self._stop_immediate_release_timer()
         self._assure_hourly_timer()
 
-    async def _do_immediate_takeover(self, to_studio: DispatcherStudio):
+    async def _do_immediate_takeover(self, to_studio: Studio):
         self._takeover_state_value = None
         self._release_state_value = None
         self._immediate_state_value = None
