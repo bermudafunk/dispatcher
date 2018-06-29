@@ -11,6 +11,8 @@ from bermudafunk import GPIO, base
 
 logger = logging.getLogger(__name__)
 
+audit_logger = logger
+
 
 @enum.unique
 class Button(enum.Enum):
@@ -47,9 +49,9 @@ class Studio:
         self.release_button_pin = release_button_pin
         self.immediate_button_pin = immediate_button_pin
 
-        self._takeover_led = takeover_led
-        self._release_led = release_led
-        self._immediate_led = immediate_led
+        self._takeover_led = takeover_led if takeover_led else GPIO.DummyLed()
+        self._release_led = release_led if release_led else GPIO.DummyLed()
+        self._immediate_led = immediate_led if immediate_led else GPIO.DummyLed()
 
         self.dispatcher_button_event_queue = None  # type: typing.Optional[asyncio.Queue]
 
@@ -111,15 +113,15 @@ class Studio:
             GPIO.register_button(new_pin, coroutine=self._gpio_button_coroutine)
 
     @property
-    def takeover_led(self) -> GPIO.Led:
+    def takeover_led(self) -> GPIO.DummyLed:
         return self._takeover_led
 
     @property
-    def release_led(self) -> GPIO.Led:
+    def release_led(self) -> GPIO.DummyLed:
         return self._release_led
 
     @property
-    def immediate_led(self) -> GPIO.Led:
+    def immediate_led(self) -> GPIO.DummyLed:
         return self._immediate_led
 
     async def _gpio_button_coroutine(self, pin):
@@ -133,6 +135,9 @@ class Studio:
 
         if event and self.dispatcher_button_event_queue:
             await self.dispatcher_button_event_queue.put(event)
+
+    def __repr__(self):
+        return '<Studio: name=%s>' % self.name
 
 
 ButtonEvent = typing.NamedTuple('ButtonEvent', [('studio', Studio), ('button', Button)])
@@ -187,11 +192,13 @@ class Dispatcher:
 
     async def _cleanup(self):
         await base.cleanup_event.wait()
+        logger.debug('cleanup timers')
         self._stop_timers()
 
     async def _process_studio_button_events(self):
         while True:
             event = await self._dispatcher_button_event_queue.get()  # type: ButtonEvent
+            logger.debug('got new event %s, process now', event)
 
             await self._change_state(event)
 
@@ -200,28 +207,28 @@ class Dispatcher:
             self._audit_state()
 
     async def _change_state(self, event: ButtonEvent):
-        # Zustand: Automation on Air
         if self._on_air_studio == self._automat_studio:
-            # Studio X drückt „Übernahme“
+            audit_logger.info("Zustand: Automation on Air")
             if event.button is Button.takeover:
-                # → nicht „Sofort-Status“
+                audit_logger.info("Studio X drückt „Übernahme“")
                 if self._immediate_state_value is None:
-                    # → noch nicht von anderswo angefordert
+                    audit_logger.info("→ nicht „Sofort-Status“")
                     if self._takeover_state_value is None:
-                        # → Übernahme anfordern → zum Stundenwechsel wird hierher umgeschaltet
+                        audit_logger.info("→ noch nicht von anderswo angefordert")
+                        audit_logger.info("→ Übernahme anfordern → zum Stundenwechsel wird hierher umgeschaltet")
                         self._takeover_state_value = event.studio
-                    # → schon vom eigenen Studio Übernahme angefordert
                     elif self._takeover_state_value == event.studio:
-                        # → Anforderung löschen
+                        audit_logger.info("→ schon vom eigenen Studio Übernahme angefordert")
+                        audit_logger.info("→ Anforderung löschen")
                         self._takeover_state_value = None
-                # → schon „Sofort-Status“ vom eigenen Studio aktiviert
                 elif self._immediate_state_value == event.studio:
-                    # → sofortige Übernahme
+                    audit_logger.info("→ schon „Sofort-Status“ vom eigenen Studio aktiviert")
+                    audit_logger.info("→ sofortige Übernahme")
                     await self._do_immediate_takeover(event.studio)
 
-            # Studio X drückt „Freigabe“
             elif event.button is Button.release:
-                # → Rücksetzung aller eigenen Anforderungen (Übernahme/ Sofort-Status)
+                audit_logger.info("Studio X drückt „Freigabe“")
+                audit_logger.info("→ Rücksetzung aller eigenen Anforderungen (Übernahme/ Sofort-Status)")
                 if self._takeover_state_value == event.studio:
                     self._takeover_state_value = None
                 if self._release_state_value == event.studio:
@@ -231,93 +238,93 @@ class Dispatcher:
                     self._immediate_state_value = None
                     self._assure_hourly_timer()
 
-            # Studio X drückt „Sofort“
             elif event.button is Button.immediate:
-                # → Sofort-Status war noch nicht gesetzt
+                audit_logger.info("Studio X drückt „Sofort“")
                 if self._immediate_state_value is None:
-                    # → Sofort-Status wird für das eigene Studio für die Dauer von 5 Minuten gesetzt
+                    audit_logger.info("→ Sofort-Status war noch nicht gesetzt")
+                    audit_logger.info("→ Sofort-Status wird für das eigene Studio für die Dauer von 5 Minuten gesetzt")
                     self._stop_immediate_timers()
                     self._immediate_state_value = event.studio
                     self._start_immediate_state_timer()
 
-                # → Sofort-Status für das eigene Studio war schon gesetzt
                 elif self._immediate_state_value == event.studio:
-                    # → Sofort-Status wieder löschen
+                    audit_logger.info("→ Sofort-Status für das eigene Studio war schon gesetzt")
+                    audit_logger.info("→ Sofort-Status wieder löschen")
                     self._immediate_state_value = None
                     self._stop_immediate_timers()
                     self._assure_hourly_timer()
 
-        # Zustand: Studio X ist on Air und drückt Buttons
         elif self._on_air_studio == event.studio:
-            # Studio X drückt „Übernahme“
+            audit_logger.info("Zustand: Studio X ist on Air und drückt Buttons")
             if event.button is Button.takeover:
-                # → Wenn Freigabe oder Sofort-Freigabe von uns schon erteilt
+                audit_logger.info("Studio X drückt „Übernahme“")
                 if self._release_state_value == event.studio:
-                    # → Noch keine andere Übernahme-Anforderung
+                    audit_logger.info("→ Wenn Freigabe oder Sofort-Freigabe von uns schon erteilt")
                     if self._takeover_state_value is None:
-                        # → Freigabe löschen
+                        audit_logger.info("→ Noch keine andere Übernahme-Anforderung")
+                        audit_logger.info("→ Freigabe löschen")
                         self._release_state_value = None
 
-            # Studio X drückt „Freigabe“
             elif event.button is Button.release:
-                # → Wenn kein Sofort-Status gesetzt
+                audit_logger.info("Studio X drückt „Freigabe“")
                 if self._immediate_state_value is None:
-                    # → Wenn noch nicht Freigabe erteilt
+                    audit_logger.info("→ Wenn kein Sofort-Status gesetzt")
                     if self._release_state_value is None:
-                        # → Freigabe erteilen → Zum Stundenwechsel wird umgeschaltet
+                        audit_logger.info("→ Wenn noch nicht Freigabe erteilt")
+                        audit_logger.info("→ Freigabe erteilen → Zum Stundenwechsel wird umgeschaltet")
                         self._release_state_value = event.studio
-                    # → Wenn Freigabe schon erteilt
                     elif self._release_state_value == event.studio:
-                        # → Übernahme noch nicht angefordert
+                        audit_logger.info("→ Wenn Freigabe schon erteilt")
                         if self._takeover_state_value is None:
-                            # → Freigabe wieder löschen
+                            audit_logger.info("→ Übernahme noch nicht angefordert")
+                            audit_logger.info("→ Freigabe wieder löschen")
                             self._release_state_value = None
-                # → Wenn Sofort-Status gesetzt
                 elif self._immediate_state_value == event.studio:
-                    # → Noch keine Sofort-Freigabe gestartet
+                    audit_logger.info("→ Wenn Sofort-Status gesetzt")
                     if self._release_state_value is None:
-                        # → Sofort-Freigabe starten → Nach 30 Sekunden auf Automation umschalten
+                        audit_logger.info("→ Noch keine Sofort-Freigabe gestartet")
+                        audit_logger.info("→ Sofort-Freigabe starten → Nach 30 Sekunden auf Automation umschalten")
                         self._stop_hourly_timer()
                         self._release_state_value = event.studio
                         self._start_immediate_release_timer()
-                    # → Sofort-Freigabe bereits gestartet
                     elif self._release_state_value == event.studio:
-                        # → Sofort-Freigabe abbrechen
+                        audit_logger.info("→ Sofort-Freigabe bereits gestartet")
+                        audit_logger.info("→ Sofort-Freigabe abbrechen")
                         self._release_state_value = None
                         self._stop_immediate_release_timer()
                         self._assure_hourly_timer()
 
-            # Studio X drück „Sofort-Button“
             elif event.button is Button.immediate:
-                # → Wenn kein Sofort-Status gesetzt ist
+                audit_logger.info("Studio X drück „Sofort-Button“")
                 if self._immediate_state_value is None:
-                    # → Sofort-Status setzen
+                    audit_logger.info("→ Wenn kein Sofort-Status gesetzt ist")
+                    audit_logger.info("→ Sofort-Status setzen")
                     self._immediate_state_value = event.studio
                     self._start_immediate_state_timer()
-                # → Wenn Sofort-Status schon gesetzt
                 elif self._immediate_state_value == event.studio:
-                    # → Sofort-Status wieder löschen
+                    audit_logger.info("→ Wenn Sofort-Status schon gesetzt")
+                    audit_logger.info("→ Sofort-Status wieder löschen")
                     self._immediate_state_value = None
                     self._stop_immediate_timers()
                     self._assure_hourly_timer()
 
-        # Zustand: Studio X ist on Air und Studio Y drückt Buttons
         elif self._on_air_studio != event.studio:
-            # Studio Y drückt „Übernahme“
+            audit_logger.info("Zustand: Studio X ist on Air und Studio Y drückt Buttons")
             if event.button is Button.takeover:
-                # → Wenn Sofort-Freigabe aktiviert ist
+                audit_logger.info("Studio Y drückt „Übernahme“")
                 if self._release_state_value == self._on_air_studio and self._immediate_state_value == self._on_air_studio:
-                    # → Sofortige Übernahme
+                    audit_logger.info("→ Wenn Sofort-Freigabe aktiviert ist")
+                    audit_logger.info("→ Sofortige Übernahme")
                     await self._do_immediate_takeover(event.studio)
-                # Sonst
                 else:
-                    # → Wenn kein anderes Studio bereits Übernahme angefordert hat
+                    audit_logger.info("Sonst")
                     if self._takeover_state_value is None:
-                        # → Übernahme anfordern
+                        audit_logger.info("→ Wenn kein anderes Studio bereits Übernahme angefordert hat")
+                        audit_logger.info("→ Übernahme anfordern")
                         self._takeover_state_value = event.studio
-                    # → Wenn selbst schon Übernahme angefordert
                     elif self._takeover_state_value == event.studio:
-                        # → Übernahme-Anforderung löschen
+                        audit_logger.info("→ Wenn selbst schon Übernahme angefordert")
+                        audit_logger.info("→ Übernahme-Anforderung löschen")
                         self._takeover_state_value = None
 
     def _assure_led_status(self):
@@ -327,7 +334,9 @@ class Dispatcher:
         pass  # TODO
 
     async def _switch_to_studio(self, studio: Studio):
-        logger.info('switch to studio %s', studio.name)
+        logger.info('Wechsel zu Studio %s', studio)
+        audit_logger.warning('Wechsel zu Studio %s', studio)
+
         self._on_air_studio = studio
         await self._set_current_state()
 
@@ -337,6 +346,8 @@ class Dispatcher:
         self._assure_hourly_timer()
 
     async def _do_immediate_takeover(self, to_studio: Studio):
+        logger.info('Sofort-Wechsel zu Studio %s', to_studio)
+        audit_logger.warning('Sofort-Wechsel zu Studio %s', to_studio)
         self._takeover_state_value = None
         self._release_state_value = None
         self._immediate_state_value = None
@@ -346,11 +357,12 @@ class Dispatcher:
 
     async def _assure_current_state_loop(self):
         while True:
-            logger.info('assure current state')
+            logger.debug('Assure that the controller have the desired state!')
             await self._symnet_controller.set_position(self._studios_to_selector_value[self._on_air_studio])
             await asyncio.sleep(300)
 
     async def _set_current_state(self, *args, **kwargs):
+        logger.debug('The the controller state now!')
         await self._symnet_controller.set_position(self._studios_to_selector_value[self._on_air_studio])
 
     def _assure_hourly_timer(self):

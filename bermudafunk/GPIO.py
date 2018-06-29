@@ -25,55 +25,77 @@ class LedState(enum.Enum):
     BLINK = 'blink'
 
 
-class Led:
+class DummyLed:
+    def __init__(self) -> None:
+        self._state = LedState.OFF
+        self._blink_freq = 2
+
+    @property
+    def blink_freq(self) -> float:
+        return self._blink_freq
+
+    @blink_freq.setter
+    def blink_freq(self, new_freq: float):
+        assert new_freq > 0
+        self._blink_freq = new_freq
+
+    @property
+    def state(self) -> LedState:
+        return self._state
+
+    @state.setter
+    def state(self, new_val: LedState):
+        self._state = new_val
+
+
+class Led(DummyLed):
     def __init__(self, pin):
+        super().__init__()
         global _leds
         _leds[str(pin)] = self
 
-        self.pin = int(pin)
-        self.state = LedState.OFF
-        self.blink_freq = 2
+        self._pin = int(pin)
 
         self._blink_task = None
 
         _setup()
-        _check_pin(self.pin, 'led')
-        GPIO.setup(self.pin, GPIO.OUT)
-        GPIO.output(self.pin, GPIO.LOW)
+        _check_pin(self._pin, 'led')
+        GPIO.setup(self._pin, GPIO.OUT)
+        GPIO.output(self._pin, GPIO.LOW)
 
     def __del__(self):
         if self._blink_task is not None:
             self._blink_task.cancel()
-        GPIO.output(self.pin, GPIO.LOW)
+        GPIO.output(self._pin, GPIO.LOW)
 
-    def get_state(self):
-        return self.state
+    @property
+    def state(self) -> LedState:
+        return self._state
 
-    def set_state(self, new_state: LedState, force=False, blink_freq=2):
-        self.blink_freq = blink_freq
-
-        if self.state == new_state and not force:
+    @state.setter
+    def state(self, new_state: LedState):
+        if self._state == new_state:
             return  # Same state, nothing to change
 
-        self.state = new_state
+        self._state = new_state
 
         if self._blink_task is not None:
             self._blink_task.cancel()
             self._blink_task = None
 
         if new_state is LedState.ON:
-            GPIO.output(self.pin, GPIO.HIGH)
+            GPIO.output(self._pin, GPIO.HIGH)
         elif new_state is LedState.OFF:
-            GPIO.output(self.pin, GPIO.LOW)
+            GPIO.output(self._pin, GPIO.LOW)
         elif new_state is LedState.BLINK:
             self._blink_task = loop.create_task(self._blink())
 
     async def _blink(self):
         while True:
-            GPIO.output(self.pin, GPIO.HIGH)
-            await asyncio.sleep(1 / self.blink_freq)
-            GPIO.output(self.pin, GPIO.LOW)
-            await asyncio.sleep(1 / self.blink_freq)
+            GPIO.output(self._pin, GPIO.HIGH)
+            await asyncio.sleep(1 / self._blink_freq)
+            GPIO.output(self._pin, GPIO.LOW)
+            await asyncio.sleep(1 / self._blink_freq)
 
 
 def _setup():
