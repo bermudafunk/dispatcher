@@ -353,14 +353,6 @@ class Dispatcher:
         return self._selector_value_to_studio[self._on_air_selector_value].name
 
     @property
-    def x(self):
-        return self._x
-
-    @property
-    def y(self):
-        return self._y
-
-    @property
     def machine(self) -> Machine:
         return self._machine
 
@@ -592,6 +584,15 @@ class Dispatcher:
             logger.debug('stop immediate release timer')
             self._immediate_release_timer.cancel()
             self._immediate_release_timer = None
+
+    @property
+    def status(self):
+        return {
+            'state': self.machine.state,
+            'on_air_studio': self.on_air_studio_name,
+            'x': self._x.name if self._x else None,
+            'y': self._y.name if self._y else None,
+        }
 
 
 def calc_next_hour_timestamp(minutes=0, seconds=0):
