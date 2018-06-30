@@ -19,6 +19,7 @@ if __name__ == '__main__':
 
     af_1 = bermudafunk.dispatcher.Studio('af_1')
     af_2 = bermudafunk.dispatcher.Studio('af_2')
+    af_3 = bermudafunk.dispatcher.Studio('af_3')
 
     dispatcher = bermudafunk.dispatcher.Dispatcher(
         symnet_controller=main_selector,
@@ -26,6 +27,7 @@ if __name__ == '__main__':
         studio_mapping=[
             bermudafunk.dispatcher.DispatcherStudioDefinition(studio=af_1, selector_value=2),
             bermudafunk.dispatcher.DispatcherStudioDefinition(studio=af_2, selector_value=3),
+            bermudafunk.dispatcher.DispatcherStudioDefinition(studio=af_3, selector_value=4),
         ]
     )
 

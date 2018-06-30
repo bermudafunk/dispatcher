@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import enum
 import logging
+import random
 import time
 import typing
 from collections import namedtuple
@@ -162,7 +163,7 @@ class Dispatcher:
                  symnet_controller: bermudafunk.SymNet.SymNetSelectorController,
                  automat_selector_value: int,
                  studio_mapping: typing.List[DispatcherStudioDefinition],
-                 audit_internal_state=True
+                 audit_internal_state=False
                  ):
 
         if audit_internal_state:
@@ -172,6 +173,9 @@ class Dispatcher:
             def _x_set(_self, new_val: Studio):
                 if _self.__x is new_val:
                     return
+                import inspect
+                stack = inspect.stack()
+                logger.debug('stack %s', stack[1].lineno)
                 logger.debug('change _x to %s', new_val)
                 _self.__x = new_val
 
@@ -181,6 +185,9 @@ class Dispatcher:
             def _y_set(_self, new_val: Studio):
                 if _self.__y is new_val:
                     return
+                import inspect
+                stack = inspect.stack()
+                logger.debug('stack %s', stack[1].lineno)
                 logger.debug('change _y to %s', new_val)
                 _self.__y = new_val
 
@@ -214,6 +221,7 @@ class Dispatcher:
         self._studios_to_selector_value = {}  # type: typing.Dict[Studio, int]
         self._selector_value_to_studio = {}  # type: typing.Dict[int, Studio]
         for studio_def in studio_mapping:
+            assert studio_def.selector_value not in self._selector_value_to_studio.keys()
             self._studios.append(studio_def.studio)
             self._studios_to_selector_value[studio_def.studio] = studio_def.selector_value
             self._selector_value_to_studio[studio_def.selector_value] = studio_def.studio
@@ -242,6 +250,7 @@ class Dispatcher:
             'studio_X_on_air_immediate_state',
             'studio_X_on_air_immediate_release',
             'from_studio_X_change_to_studio_Y_on_next_hour',
+            'noop'
         ]
 
         self._machine = Machine(states=states,
@@ -251,7 +260,7 @@ class Dispatcher:
                                 send_event=True,
                                 before_state_change=[self._before_state_change],
                                 after_state_change=[self._after_state_change],
-                                finalize_event=[self._audit_state]
+                                finalize_event=[self._audit_state, self._assure_led_status]
                                 )
 
         self._machine.add_transition(trigger='takeover_X', source='automat_on_air', dest='from_automat_change_to_studio_X_on_next_hour')
@@ -286,6 +295,12 @@ class Dispatcher:
         self._machine.add_transition(trigger='takeover_Y', source='from_studio_X_change_to_studio_Y_on_next_hour', dest='from_studio_X_change_to_automat_on_next_hour')
         self._machine.add_transition(trigger='release_Y', source='from_studio_X_change_to_studio_Y_on_next_hour', dest='from_studio_X_change_to_automat_on_next_hour')
         self._machine.add_transition(trigger='next_hour', source='from_studio_X_change_to_studio_Y_on_next_hour', dest='studio_X_on_air', before=[self._prepare_change_to_y])
+
+        for _, button in Button.__members__.items():
+            for kind in ['X', 'Y']:
+                trigger_name = button.name + '_' + kind
+                if trigger_name not in self._machine.events.keys():
+                    self._machine.add_transition(trigger=trigger_name, source='noop', dest='noop')  # noops to complete all combinations of buttons presses
 
         self._machine.on_enter_automat_on_air(self._change_to_automat)
         self._machine.on_enter_studio_X_on_air(self._change_to_studio)
@@ -332,6 +347,9 @@ class Dispatcher:
         base.loop.create_task(self._set_current_state())
 
     def _before_state_change(self, event: EventData):
+        if event.transition.dest is None:  # internal transition, don't do anything right now
+            return
+
         # check if button event
         if 'button_event' in event.kwargs.keys():
             button_event = event.kwargs.get('button_event')  # type: ButtonEvent
@@ -341,26 +359,29 @@ class Dispatcher:
             elif 'Y' in event_name:
                 self._y = button_event.studio
 
-        source_transition = event.transition.source
-        if 'next_hour' in source_transition:
+        source_state = event.transition.source
+        if 'next_hour' in source_state:
             self._stop_next_hour_timer()
-        elif 'immediate_state' in source_transition:
+        elif 'immediate_state' in source_state:
             self._stop_immediate_state_timer()
-        elif 'immediate_release' in source_transition:
+        elif 'immediate_release' in source_state:
             self._stop_immediate_release_timer()
 
     def _after_state_change(self, event: EventData):
+        if event.transition.dest is None:  # internal transition, don't do anything right now
+            return
+
         for tmp in ['X', 'Y']:
-            if tmp not in event.transition.dest:
-                setattr(self, '_' + tmp, None)
+            if event.transition.dest and tmp not in event.transition.dest:
+                setattr(self, '_' + tmp.lower(), None)
 
         # start timers
-        destination_transition = event.transition.dest
-        if 'next_hour' in destination_transition:
+        destination_state = event.transition.dest
+        if 'next_hour' in destination_state:
             self._start_next_hour_timer()
-        elif 'immediate_state' in destination_transition:
+        elif 'immediate_state' in destination_state:
             self._start_immediate_state_timer()
-        elif 'immediate_release' in destination_transition:
+        elif 'immediate_release' in destination_state:
             self._start_immediate_release_timer()
 
     async def _cleanup(self):
@@ -375,18 +396,26 @@ class Dispatcher:
             event = await self._dispatcher_button_event_queue.get()  # type: ButtonEvent
             logger.debug('got new event %s, process now', event)
 
-            append = '_X'
-            if self._x is not None:
-                if self._x != event.studio:
-                    append = '_Y'
+            append = None
+            if self._x is None:
+                append = '_X'
+            else:
+                if self._x == event.studio:
+                    append = '_X'
+                else:
+                    if self._y is None or self._y == event.studio:
+                        append = '_Y'
 
-            self._machine.trigger(event.button.name + append, button_event=event)
+            if append:
+                trigger_name = event.button.name + append
+                logger.debug('state %s', {'state': self._machine.state, 'x': self._x, 'y': self._y})
+                logger.debug('trigger_name trying to call %s', trigger_name)
+                self._machine.trigger(trigger_name, button_event=event)
 
             self._audit_state()
-
             self._assure_led_status()
 
-    def _assure_led_status(self):
+    def _assure_led_status(self, _: EventData = None):
         pass  # TODO
 
     def _audit_state(self, _: EventData = None):
@@ -409,10 +438,12 @@ class Dispatcher:
         while True:
             logger.debug('Assure that the controller have the desired state!')
             await self._set_current_state()
-            await asyncio.sleep(300)
+            sleep_time = random.randint(300, 600)
+            logger.debug('Sleep for %s seconds', sleep_time)
+            await asyncio.sleep(sleep_time)
 
     async def _set_current_state(self, *_, **__):
-        logger.debug('Set the controller state now!')
+        logger.info('Set the controller state now to %s!', self._automat_selector_value)
         await self._symnet_controller.set_position(self._automat_selector_value)
 
     def _start_next_hour_timer(self, _: EventData = None):
@@ -427,10 +458,10 @@ class Dispatcher:
         try:
             next_hour_timestamp = calc_next_hour_timestamp()
             duration_to_next_hour = next_hour_timestamp - time.time()
-            while duration_to_next_hour > 0:
+            while duration_to_next_hour > 0.2:
                 logger.debug('duration to next full hour %s', duration_to_next_hour)
 
-                sleep_time = duration_to_next_hour
+                sleep_time = duration_to_next_hour - 0.2
                 if duration_to_next_hour > 2:
                     sleep_time = duration_to_next_hour - 2
 
@@ -447,6 +478,7 @@ class Dispatcher:
 
     def _stop_next_hour_timer(self, _: EventData = None):
         if self._next_hour_timer:
+            logger.debug('stop next hour timer')
             self._next_hour_timer.cancel()
             self._next_hour_timer = None
 
@@ -467,6 +499,7 @@ class Dispatcher:
 
     def _stop_immediate_state_timer(self, _: EventData = None):
         if self._immediate_state_timer:
+            logger.debug('stop immediate state timer')
             self._immediate_state_timer.cancel()
             self._immediate_state_timer = None
 
@@ -487,6 +520,7 @@ class Dispatcher:
 
     def _stop_immediate_release_timer(self, _: EventData = None):
         if self._immediate_release_timer:
+            logger.debug('stop immediate release timer')
             self._immediate_release_timer.cancel()
             self._immediate_release_timer = None
 

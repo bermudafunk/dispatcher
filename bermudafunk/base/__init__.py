@@ -8,11 +8,12 @@ loop = asyncio.get_event_loop()
 loop.set_debug(config.DEBUG)
 
 logging.basicConfig(format='%(asctime)s : %(levelname)8s : %(name)30s : %(funcName)-20s : %(lineno)4d : %(message)s')
+logging.getLogger('transitions').setLevel(logging.INFO)
 
 if config.DEBUG:
     logging.getLogger('bermudafunk').setLevel(logging.DEBUG)
     logging.getLogger('bermudafunk.SymNet').setLevel(logging.ERROR)
-    logging.getLogger('transitions').setLevel(logging.INFO)
+    logging.getLogger('transitions').setLevel(logging.DEBUG)
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ def run_loop():
             loop.run_until_complete(asyncio.wait(cleanup_tasks))
         loop.stop()
         loop.close()
+        logger.warning("End of looping!")
 
 
 def stop():
