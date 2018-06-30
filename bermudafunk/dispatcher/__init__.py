@@ -250,7 +250,8 @@ class Dispatcher:
             'studio_X_on_air_immediate_state',
             'studio_X_on_air_immediate_release',
             'from_studio_X_change_to_studio_Y_on_next_hour',
-            'noop'
+            'studio_X_on_air_studio_Y_takeover_request',
+            'noop',
         ]
 
         self._machine = Machine(states=states,
@@ -277,6 +278,7 @@ class Dispatcher:
 
         self._machine.add_transition(trigger='release_X', source='studio_X_on_air', dest='from_studio_X_change_to_automat_on_next_hour')
         self._machine.add_transition(trigger='immediate_X', source='studio_X_on_air', dest='studio_X_on_air_immediate_state')
+        self._machine.add_transition(trigger='takeover_Y', source='studio_X_on_air', dest='studio_X_on_air_studio_Y_takeover_request')
 
         self._machine.add_transition(trigger='takeover_X', source='from_studio_X_change_to_automat_on_next_hour', dest='studio_X_on_air')
         self._machine.add_transition(trigger='release_X', source='from_studio_X_change_to_automat_on_next_hour', dest='studio_X_on_air')
@@ -295,6 +297,10 @@ class Dispatcher:
         self._machine.add_transition(trigger='takeover_Y', source='from_studio_X_change_to_studio_Y_on_next_hour', dest='from_studio_X_change_to_automat_on_next_hour')
         self._machine.add_transition(trigger='release_Y', source='from_studio_X_change_to_studio_Y_on_next_hour', dest='from_studio_X_change_to_automat_on_next_hour')
         self._machine.add_transition(trigger='next_hour', source='from_studio_X_change_to_studio_Y_on_next_hour', dest='studio_X_on_air', before=[self._prepare_change_to_y])
+
+        self._machine.add_transition(trigger='takeover_Y', source='studio_X_on_air_studio_Y_takeover_request', dest='studio_X_on_air')
+        self._machine.add_transition(trigger='release_Y', source='studio_X_on_air_studio_Y_takeover_request', dest='studio_X_on_air')
+        self._machine.add_transition(trigger='release_X', source='studio_X_on_air_studio_Y_takeover_request', dest='from_studio_X_change_to_studio_Y_on_next_hour')
 
         for _, button in Button.__members__.items():
             for kind in ['X', 'Y']:
