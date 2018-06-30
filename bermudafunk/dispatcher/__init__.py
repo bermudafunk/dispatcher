@@ -7,7 +7,7 @@ import typing
 from collections import namedtuple
 
 from transitions import EventData
-from transitions.extensions import GraphMachine as Machine
+from transitions.extensions import LockedGraphMachine as Machine
 from transitions.extensions.diagrams import Graph
 
 import bermudafunk.SymNet
@@ -156,6 +156,8 @@ ButtonEvent = typing.NamedTuple('ButtonEvent', [('studio', Studio), ('button', B
 
 
 class Dispatcher:
+    AUTOMAT = 'automat'
+
     def __init__(self,
                  symnet_controller: bermudafunk.SymNet.SymNetSelectorController,
                  automat_selector_value: int,
@@ -164,32 +166,32 @@ class Dispatcher:
                  ):
 
         if audit_internal_state:
-            def _x_get(self):
-                return self.__x
+            def _x_get(_self):
+                return _self.__x
 
-            def _x_set(self, new_val: Studio):
-                if self.__x is new_val:
+            def _x_set(_self, new_val: Studio):
+                if _self.__x is new_val:
                     return
                 logger.debug('change _x to %s', new_val)
-                self.__x = new_val
+                _self.__x = new_val
 
-            def _y_get(self):
-                return self.__y
+            def _y_get(_self):
+                return _self.__y
 
-            def _y_set(self, new_val: Studio):
-                if self.__y is new_val:
+            def _y_set(_self, new_val: Studio):
+                if _self.__y is new_val:
                     return
                 logger.debug('change _y to %s', new_val)
-                self.__y = new_val
+                _self.__y = new_val
 
-            def _on_air_selector_value_get(self):
-                return self.__on_air_selector_value
+            def _on_air_selector_value_get(_self):
+                return _self.__on_air_selector_value
 
-            def _on_air_selector_value_set(self, new_val: int):
-                if self.__on_air_selector_value is new_val:
+            def _on_air_selector_value_set(_self, new_val: int):
+                if _self.__on_air_selector_value is new_val:
                     return
                 logger.debug('change _on_air_selector_value to %s', new_val)
-                self.__on_air_selector_value = new_val
+                _self.__on_air_selector_value = new_val
 
             Dispatcher._x = property(_x_get, _x_set)
             Dispatcher._y = property(_y_get, _y_set)
@@ -218,6 +220,7 @@ class Dispatcher:
             studio_def.studio.dispatcher_button_event_queue = self._dispatcher_button_event_queue
 
         assert self._automat_selector_value not in self._selector_value_to_studio.keys()
+        assert Dispatcher.AUTOMAT not in self._studios_to_selector_value.keys()
 
         # State machine values
 
@@ -277,12 +280,12 @@ class Dispatcher:
 
         self._machine.add_transition(trigger='takeover_X', source='studio_X_on_air_immediate_release', dest='studio_X_on_air_immediate_state')
         self._machine.add_transition(trigger='release_X', source='studio_X_on_air_immediate_release', dest='studio_X_on_air_immediate_state')
-        self._machine.add_transition(trigger='takeover_Y', source='studio_X_on_air_immediate_release', dest='studio_X_on_air', before=[self._prepare_change_to_Y])
+        self._machine.add_transition(trigger='takeover_Y', source='studio_X_on_air_immediate_release', dest='studio_X_on_air', before=[self._prepare_change_to_y])
         self._machine.add_transition(trigger='immediate_release_timeout', source='studio_X_on_air_immediate_release', dest='automat_on_air')
 
         self._machine.add_transition(trigger='takeover_Y', source='from_studio_X_change_to_studio_Y_on_next_hour', dest='from_studio_X_change_to_automat_on_next_hour')
         self._machine.add_transition(trigger='release_Y', source='from_studio_X_change_to_studio_Y_on_next_hour', dest='from_studio_X_change_to_automat_on_next_hour')
-        self._machine.add_transition(trigger='next_hour', source='from_studio_X_change_to_studio_Y_on_next_hour', dest='studio_X_on_air', before=[self._prepare_change_to_Y])
+        self._machine.add_transition(trigger='next_hour', source='from_studio_X_change_to_studio_Y_on_next_hour', dest='studio_X_on_air', before=[self._prepare_change_to_y])
 
         self._machine.on_enter_automat_on_air(self._change_to_automat)
         self._machine.on_enter_studio_X_on_air(self._change_to_studio)
@@ -293,12 +296,29 @@ class Dispatcher:
         base.start_cleanup_aware_coroutine(self._process_studio_button_events)
         base.cleanup_tasks.append(base.loop.create_task(self._cleanup()))
 
-    def get_on_air_studio_name(self):
+    @property
+    def on_air_studio_name(self):
         if self._on_air_selector_value == self._automat_selector_value:
-            return 'automat'
+            return Dispatcher.AUTOMAT
         return self._selector_value_to_studio[self._on_air_selector_value].name
 
-    def _prepare_change_to_Y(self, _: EventData = None):
+    @property
+    def x(self):
+        return self._x
+
+    @property
+    def y(self):
+        return self._y
+
+    @property
+    def machine(self) -> Machine:
+        return self._machine
+
+    @property
+    def studios(self) -> typing.List[Studio]:
+        return self._studios
+
+    def _prepare_change_to_y(self, _: EventData = None):
         self._x, self._y = self._y, None
 
     def _change_to_automat(self, _: EventData):
@@ -355,7 +375,6 @@ class Dispatcher:
             event = await self._dispatcher_button_event_queue.get()  # type: ButtonEvent
             logger.debug('got new event %s, process now', event)
 
-            # TODO: Do machine state change
             append = '_X'
             if self._x is not None:
                 if self._x != event.studio:

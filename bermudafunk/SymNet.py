@@ -149,7 +149,7 @@ class SymNetController:
         self.proto.write('CS {cn:d} {cv:d}\r'.format(cn=self.controller_number, cv=self.raw_value))
         return callback_obj
 
-    def _assure_callback(self, data_str, m=None):
+    def _assure_callback(self, _, m=None):
         if m is None or m.group(1) == 'NAK':
             raise Exception(
                 'Unknown error occurred awaiting the acknowledge of setting controller number {:d}'.format(
@@ -166,7 +166,7 @@ class SymNetController:
         self.proto.write('GS2 {:d}\r'.format(self.controller_number))
         return callback_obj
 
-    def _retrieve_callback(self, data_str, m=None):
+    def _retrieve_callback(self, _, m=None):
         if m is None:
             raise Exception('Error executing GS2 command, controller {}'.format(self.controller_number))
         self._set_raw_value(int(m.group(1)))

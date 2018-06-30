@@ -1,7 +1,20 @@
+import functools
+from concurrent.futures import ThreadPoolExecutor
+
 from aiohttp import web
 
 import bermudafunk.base
 from bermudafunk.dispatcher import Studio, ButtonEvent, Button, Dispatcher
+
+_executor = ThreadPoolExecutor(max_workers=2)
+
+
+def redraw_complete_graph(dispatcher: Dispatcher):
+    dispatcher.machine.get_graph().draw('static/my_state_diagram.png', prog='dot')
+
+
+def redraw_graph(dispatcher: Dispatcher):
+    dispatcher.machine.get_graph(show_roi=True).draw('static/my_state_diagram.png', prog='dot')
 
 
 async def run(dispatcher: Dispatcher):
@@ -10,17 +23,28 @@ async def run(dispatcher: Dispatcher):
     routes.static('/static', 'static/')
 
     @routes.get('/')
-    async def redirect_to_static_html(request: web.Request) -> web.StreamResponse:
+    async def redirect_to_static_html(_: web.Request) -> web.StreamResponse:
         return web.HTTPFound('/static/index.html')
 
     @routes.get('/api/v1/generate_state_machine_image')
-    async def generate_machine_image(request: web.Request) -> web.StreamResponse:
-        dispatcher._machine.get_graph().draw('static/my_state_diagram.png', prog='dot')
+    async def generate_machine_image(_: web.Request) -> web.StreamResponse:
+        await bermudafunk.base.loop.run_in_executor(_executor, functools.partial(redraw_complete_graph, dispatcher))
         return web.HTTPFound('/static/my_state_diagram.png')
 
+    @routes.get('/api/v1/status')
+    async def list_studios(_: web.Request) -> web.StreamResponse:
+        return web.json_response(
+            {
+                'state': dispatcher.machine.state,
+                'on_air_studio': dispatcher.on_air_studio_name,
+                'x': dispatcher.x.name if dispatcher.x else None,
+                'y': dispatcher.y.name if dispatcher.y else None,
+            }
+        )
+
     @routes.get('/api/v1/studios')
-    async def list_studios(request: web.Request) -> web.StreamResponse:
-        return web.json_response(list(Studio.names.keys()))
+    async def list_studios(_: web.Request) -> web.StreamResponse:
+        return web.json_response([studio.name for studio in dispatcher.studios])
 
     @routes.get('/api/v1/press/{studio_name}/{button}')
     async def button_press(request: web.Request) -> web.StreamResponse:
@@ -31,7 +55,7 @@ async def run(dispatcher: Dispatcher):
 
         await event.studio.dispatcher_button_event_queue.put(event)
 
-        return web.json_response({})
+        return web.json_response({'status': 'emitted_button_event'})
 
     @routes.get('/api/v1/leds/{studio_name}')
     async def led_status(request: web.Request) -> web.StreamResponse:

@@ -9,7 +9,7 @@ if __name__ == '__main__':
 
     try:
         systemd.setup()
-    except:
+    except RuntimeError:
         pass
 
     device = SymNetDevice(local_address=(base.config.myIp, base.config.myPort),
@@ -30,6 +30,7 @@ if __name__ == '__main__':
     )
 
     import functools
+
     bermudafunk.base.start_cleanup_aware_coroutine(functools.partial(web.run, dispatcher))
 
     base.run_loop()
