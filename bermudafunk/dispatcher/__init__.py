@@ -7,7 +7,7 @@ import time
 import typing
 from collections import namedtuple
 
-from transitions import EventData
+from transitions import EventData, MachineError
 from transitions.extensions import LockedGraphMachine as Machine
 from transitions.extensions.diagrams import Graph
 
@@ -45,9 +45,9 @@ class Studio:
                  takeover_button_pin: int = None,
                  release_button_pin: int = None,
                  immediate_button_pin: int = None,
-                 takeover_led: GPIO.Led = None,
-                 release_led: GPIO.Led = None,
-                 immediate_led: GPIO.Led = None
+                 green_led: GPIO.Led = None,
+                 yellow_led: GPIO.Led = None,
+                 red_led: GPIO.Led = None
                  ):
         self._name = name
         if name in Studio.names.keys():
@@ -62,9 +62,9 @@ class Studio:
         self.release_button_pin = release_button_pin
         self.immediate_button_pin = immediate_button_pin
 
-        self._takeover_led = takeover_led if takeover_led else GPIO.DummyLed()
-        self._release_led = release_led if release_led else GPIO.DummyLed()
-        self._immediate_led = immediate_led if immediate_led else GPIO.DummyLed()
+        self._green_led = green_led if green_led else GPIO.DummyLed()
+        self._yellow_led = yellow_led if yellow_led else GPIO.DummyLed()
+        self._red_led = red_led if red_led else GPIO.DummyLed()
 
         self.dispatcher_button_event_queue = None  # type: typing.Optional[asyncio.Queue]
 
@@ -126,16 +126,36 @@ class Studio:
             GPIO.register_button(new_pin, coroutine=self._gpio_button_coroutine)
 
     @property
-    def takeover_led(self) -> GPIO.DummyLed:
-        return self._takeover_led
+    def green_led(self) -> GPIO.DummyLed:
+        return self._green_led
 
     @property
-    def release_led(self) -> GPIO.DummyLed:
-        return self._release_led
+    def yellow_led(self) -> GPIO.DummyLed:
+        return self._yellow_led
 
     @property
-    def immediate_led(self) -> GPIO.DummyLed:
-        return self._immediate_led
+    def red_led(self) -> GPIO.DummyLed:
+        return self._red_led
+
+    @property
+    def led_status(self) -> typing.Dict[str, typing.Dict[str, typing.Union[str, int]]]:
+        return {
+            'green':
+                {
+                    'state': self.green_led.state.name,
+                    'blink_freq': self.green_led.blink_freq
+                },
+            'yellow':
+                {
+                    'state': self.yellow_led.state.name,
+                    'blink_freq': self.yellow_led.blink_freq
+                },
+            'red':
+                {
+                    'state': self.red_led.state.name,
+                    'blink_freq': self.red_led.blink_freq
+                },
+        }
 
     async def _gpio_button_coroutine(self, pin):
         event = None
@@ -154,6 +174,20 @@ class Studio:
 
 
 ButtonEvent = typing.NamedTuple('ButtonEvent', [('studio', Studio), ('button', Button)])
+
+
+@enum.unique
+class States(enum.Enum):
+    AUTOMAT_ON_AIR = 'automat_on_air'
+    AUTOMAT_ON_AIR_IMMEDIATE_STATE_X = 'automat_on_air_immediate_state_X'
+    FROM_AUTOMAT_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR = 'from_automat_change_to_studio_X_on_next_hour'
+    STUDIO_X_ON_AIR = 'studio_X_on_air'
+    FROM_STUDIO_X_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR = 'from_studio_X_change_to_automat_on_next_hour'
+    STUDIO_X_ON_AIR_IMMEDIATE_STATE = 'studio_X_on_air_immediate_state'
+    STUDIO_X_ON_AIR_IMMEDIATE_RELEASE = 'studio_X_on_air_immediate_release'
+    FROM_STUDIO_X_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR = 'from_studio_X_change_to_studio_Y_on_next_hour'
+    STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST = 'studio_X_on_air_studio_Y_takeover_request'
+    NOOP = 'noop'
 
 
 class Dispatcher:
@@ -241,18 +275,7 @@ class Dispatcher:
 
         # State machine initialization
 
-        states = [
-            'automat_on_air',
-            'automat_on_air_immediate_state_X',
-            'from_automat_change_to_studio_X_on_next_hour',
-            'studio_X_on_air',
-            'from_studio_X_change_to_automat_on_next_hour',
-            'studio_X_on_air_immediate_state',
-            'studio_X_on_air_immediate_release',
-            'from_studio_X_change_to_studio_Y_on_next_hour',
-            'studio_X_on_air_studio_Y_takeover_request',
-            'noop',
-        ]
+        states = [state.value for _, state in States.__members__.items()]
 
         self._machine = Machine(states=states,
                                 initial='automat_on_air',
@@ -263,44 +286,50 @@ class Dispatcher:
                                 after_state_change=[self._after_state_change],
                                 finalize_event=[self._audit_state, self._assure_led_status]
                                 )
+        transitions = [
+            {'trigger': 'takeover_X', 'source': States.AUTOMAT_ON_AIR, 'dest': States.FROM_AUTOMAT_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR},
+            {'trigger': 'immediate_X', 'source': States.AUTOMAT_ON_AIR, 'dest': States.AUTOMAT_ON_AIR_IMMEDIATE_STATE_X},
 
-        self._machine.add_transition(trigger='takeover_X', source='automat_on_air', dest='from_automat_change_to_studio_X_on_next_hour')
-        self._machine.add_transition(trigger='immediate_X', source='automat_on_air', dest='automat_on_air_immediate_state_X')
+            {'trigger': 'takeover_X', 'source': States.AUTOMAT_ON_AIR_IMMEDIATE_STATE_X, 'dest': States.STUDIO_X_ON_AIR},
+            {'trigger': 'release_X', 'source': States.AUTOMAT_ON_AIR_IMMEDIATE_STATE_X, 'dest': States.AUTOMAT_ON_AIR},
+            {'trigger': 'immediate_X', 'source': States.AUTOMAT_ON_AIR_IMMEDIATE_STATE_X, 'dest': States.AUTOMAT_ON_AIR},
+            {'trigger': 'immediate_state_timeout', 'source': States.AUTOMAT_ON_AIR_IMMEDIATE_STATE_X, 'dest': States.AUTOMAT_ON_AIR},
 
-        self._machine.add_transition(trigger='takeover_X', source='automat_on_air_immediate_state_X', dest='studio_X_on_air')
-        self._machine.add_transition(trigger='release_X', source='automat_on_air_immediate_state_X', dest='automat_on_air')
-        self._machine.add_transition(trigger='immediate_X', source='automat_on_air_immediate_state_X', dest='automat_on_air')
-        self._machine.add_transition(trigger='immediate_state_timeout', source='automat_on_air_immediate_state_X', dest='automat_on_air')
+            {'trigger': 'takeover_X', 'source': States.FROM_AUTOMAT_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR, 'dest': States.AUTOMAT_ON_AIR},
+            {'trigger': 'release_X', 'source': States.FROM_AUTOMAT_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR, 'dest': States.AUTOMAT_ON_AIR},
+            {'trigger': 'next_hour', 'source': States.FROM_AUTOMAT_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR, 'dest': States.STUDIO_X_ON_AIR},
 
-        self._machine.add_transition(trigger='takeover_X', source='from_automat_change_to_studio_X_on_next_hour', dest='automat_on_air')
-        self._machine.add_transition(trigger='release_X', source='from_automat_change_to_studio_X_on_next_hour', dest='automat_on_air')
-        self._machine.add_transition(trigger='next_hour', source='from_automat_change_to_studio_X_on_next_hour', dest='studio_X_on_air')
+            {'trigger': 'release_X', 'source': States.STUDIO_X_ON_AIR, 'dest': States.FROM_STUDIO_X_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR},
+            {'trigger': 'immediate_X', 'source': States.STUDIO_X_ON_AIR, 'dest': States.STUDIO_X_ON_AIR_IMMEDIATE_STATE},
+            {'trigger': 'takeover_Y', 'source': States.STUDIO_X_ON_AIR, 'dest': States.STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST},
 
-        self._machine.add_transition(trigger='release_X', source='studio_X_on_air', dest='from_studio_X_change_to_automat_on_next_hour')
-        self._machine.add_transition(trigger='immediate_X', source='studio_X_on_air', dest='studio_X_on_air_immediate_state')
-        self._machine.add_transition(trigger='takeover_Y', source='studio_X_on_air', dest='studio_X_on_air_studio_Y_takeover_request')
+            {'trigger': 'takeover_X', 'source': States.FROM_STUDIO_X_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR, 'dest': States.STUDIO_X_ON_AIR},
+            {'trigger': 'release_X', 'source': States.FROM_STUDIO_X_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR, 'dest': States.STUDIO_X_ON_AIR},
+            {'trigger': 'takeover_Y', 'source': States.FROM_STUDIO_X_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR, 'dest': States.FROM_STUDIO_X_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR},
+            {'trigger': 'next_hour', 'source': States.FROM_STUDIO_X_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR, 'dest': States.AUTOMAT_ON_AIR},
 
-        self._machine.add_transition(trigger='takeover_X', source='from_studio_X_change_to_automat_on_next_hour', dest='studio_X_on_air')
-        self._machine.add_transition(trigger='release_X', source='from_studio_X_change_to_automat_on_next_hour', dest='studio_X_on_air')
-        self._machine.add_transition(trigger='takeover_Y', source='from_studio_X_change_to_automat_on_next_hour', dest='from_studio_X_change_to_studio_Y_on_next_hour')
-        self._machine.add_transition(trigger='next_hour', source='from_studio_X_change_to_automat_on_next_hour', dest='automat_on_air')
+            {'trigger': 'immediate_X', 'source': States.STUDIO_X_ON_AIR_IMMEDIATE_STATE, 'dest': States.STUDIO_X_ON_AIR},
+            {'trigger': 'immediate_state_timeout', 'source': States.STUDIO_X_ON_AIR_IMMEDIATE_STATE, 'dest': States.STUDIO_X_ON_AIR},
+            {'trigger': 'release_X', 'source': States.STUDIO_X_ON_AIR_IMMEDIATE_STATE, 'dest': States.STUDIO_X_ON_AIR_IMMEDIATE_RELEASE},
 
-        self._machine.add_transition(trigger='immediate_X', source='studio_X_on_air_immediate_state', dest='studio_X_on_air')
-        self._machine.add_transition(trigger='immediate_state_timeout', source='studio_X_on_air_immediate_state', dest='studio_X_on_air')
-        self._machine.add_transition(trigger='release_X', source='studio_X_on_air_immediate_state', dest='studio_X_on_air_immediate_release')
+            {'trigger': 'takeover_X', 'source': States.STUDIO_X_ON_AIR_IMMEDIATE_RELEASE, 'dest': States.STUDIO_X_ON_AIR_IMMEDIATE_STATE},
+            {'trigger': 'release_X', 'source': States.STUDIO_X_ON_AIR_IMMEDIATE_RELEASE, 'dest': States.STUDIO_X_ON_AIR_IMMEDIATE_STATE},
+            {'trigger': 'takeover_Y', 'source': States.STUDIO_X_ON_AIR_IMMEDIATE_RELEASE, 'dest': States.STUDIO_X_ON_AIR, 'before': [self._prepare_change_to_y]},
+            {'trigger': 'immediate_release_timeout', 'source': States.STUDIO_X_ON_AIR_IMMEDIATE_RELEASE, 'dest': States.AUTOMAT_ON_AIR},
 
-        self._machine.add_transition(trigger='takeover_X', source='studio_X_on_air_immediate_release', dest='studio_X_on_air_immediate_state')
-        self._machine.add_transition(trigger='release_X', source='studio_X_on_air_immediate_release', dest='studio_X_on_air_immediate_state')
-        self._machine.add_transition(trigger='takeover_Y', source='studio_X_on_air_immediate_release', dest='studio_X_on_air', before=[self._prepare_change_to_y])
-        self._machine.add_transition(trigger='immediate_release_timeout', source='studio_X_on_air_immediate_release', dest='automat_on_air')
+            {'trigger': 'takeover_Y', 'source': States.FROM_STUDIO_X_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR, 'dest': States.FROM_STUDIO_X_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR},
+            {'trigger': 'release_Y', 'source': States.FROM_STUDIO_X_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR, 'dest': States.FROM_STUDIO_X_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR},
+            {'trigger': 'next_hour', 'source': States.FROM_STUDIO_X_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR, 'dest': States.STUDIO_X_ON_AIR, 'before': [self._prepare_change_to_y]},
 
-        self._machine.add_transition(trigger='takeover_Y', source='from_studio_X_change_to_studio_Y_on_next_hour', dest='from_studio_X_change_to_automat_on_next_hour')
-        self._machine.add_transition(trigger='release_Y', source='from_studio_X_change_to_studio_Y_on_next_hour', dest='from_studio_X_change_to_automat_on_next_hour')
-        self._machine.add_transition(trigger='next_hour', source='from_studio_X_change_to_studio_Y_on_next_hour', dest='studio_X_on_air', before=[self._prepare_change_to_y])
-
-        self._machine.add_transition(trigger='takeover_Y', source='studio_X_on_air_studio_Y_takeover_request', dest='studio_X_on_air')
-        self._machine.add_transition(trigger='release_Y', source='studio_X_on_air_studio_Y_takeover_request', dest='studio_X_on_air')
-        self._machine.add_transition(trigger='release_X', source='studio_X_on_air_studio_Y_takeover_request', dest='from_studio_X_change_to_studio_Y_on_next_hour')
+            {'trigger': 'takeover_Y', 'source': States.STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST, 'dest': States.STUDIO_X_ON_AIR},
+            {'trigger': 'release_Y', 'source': States.STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST, 'dest': States.STUDIO_X_ON_AIR},
+            {'trigger': 'release_X', 'source': States.STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST, 'dest': States.FROM_STUDIO_X_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR},
+        ]
+        for transition in transitions:
+            for name, value in transition.items():
+                if isinstance(value, States):
+                    transition[name] = value.value
+            self._machine.add_transition(**transition)
 
         for _, button in Button.__members__.items():
             for kind in ['X', 'Y']:
@@ -416,12 +445,43 @@ class Dispatcher:
                 trigger_name = event.button.name + append
                 logger.debug('state %s', {'state': self._machine.state, 'x': self._x, 'y': self._y})
                 logger.debug('trigger_name trying to call %s', trigger_name)
-                self._machine.trigger(trigger_name, button_event=event)
+                try:
+                    self._machine.trigger(trigger_name, button_event=event)
+                except MachineError as e:
+                    logger.info(e)
+                    # TODO: Signal error
+                    pass
 
             self._audit_state()
             self._assure_led_status()
 
     def _assure_led_status(self, _: EventData = None):
+        state = States(self._machine.state)
+        for studio in self._studios:
+            if self._x == studio:
+                # green led
+                if state is States.STUDIO_X_ON_AIR:
+                    studio.green_led.state = GPIO.LedState.ON
+                elif state is States.FROM_AUTOMAT_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR:
+                    studio.green_led.state = GPIO.LedState.BLINK
+                else:
+                    studio.green_led.state = GPIO.LedState.OFF
+
+                # yellow led
+                if state is States.STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST:
+                    studio.yellow_led.state = GPIO.LedState.BLINK
+                else:
+                    studio.yellow_led.state = GPIO.LedState.OFF
+
+                # red led
+                if state is States.AUTOMAT_ON_AIR_IMMEDIATE_STATE_X or state is States.STUDIO_X_ON_AIR_IMMEDIATE_STATE or state is state.STUDIO_X_ON_AIR_IMMEDIATE_RELEASE:
+                    studio.red_led.state = GPIO.LedState.ON
+                else:
+                    studio.red_led.state = GPIO.LedState.OFF
+            elif self._y == studio:
+                pass
+            else:
+                pass
         pass  # TODO
 
     def _audit_state(self, _: EventData = None):
@@ -464,15 +524,18 @@ class Dispatcher:
         try:
             next_hour_timestamp = calc_next_hour_timestamp()
             duration_to_next_hour = next_hour_timestamp - time.time()
-            while duration_to_next_hour > 0.2:
+            while duration_to_next_hour > 0.3:
                 logger.debug('duration to next full hour %s', duration_to_next_hour)
 
-                sleep_time = duration_to_next_hour - 0.2
+                sleep_time = duration_to_next_hour - 0.3
                 if duration_to_next_hour > 2:
                     sleep_time = duration_to_next_hour - 2
-
-                logger.debug('sleep time %s', sleep_time)
-                await asyncio.sleep(sleep_time)
+                    logger.debug('sleep time %s', sleep_time)
+                    await asyncio.sleep(sleep_time)
+                else:
+                    logger.debug('sleep time %s', sleep_time)
+                    await asyncio.sleep(sleep_time)
+                    break
                 duration_to_next_hour = next_hour_timestamp - time.time()
 
             logger.info('hourly event %s', time.strftime('%Y-%m-%dT%H:%M:%S%z'))

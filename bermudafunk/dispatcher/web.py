@@ -61,23 +61,7 @@ async def run(dispatcher: Dispatcher):
     async def led_status(request: web.Request) -> web.StreamResponse:
         studio = Studio.names[request.match_info['studio_name']]
 
-        return web.json_response({
-            'immediate':
-                {
-                    'state': studio.immediate_led.state.name,
-                    'blink_freq': studio.immediate_led.blink_freq
-                },
-            'takeover':
-                {
-                    'state': studio.takeover_led.state.name,
-                    'blink_freq': studio.takeover_led.blink_freq
-                },
-            'release':
-                {
-                    'state': studio.release_led.state.name,
-                    'blink_freq': studio.release_led.blink_freq
-                },
-        })
+        return web.json_response(studio.led_status)
 
     app = web.Application()
     app.add_routes(routes)
