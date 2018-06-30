@@ -5,8 +5,12 @@ from bermudafunk.dispatcher import Studio, ButtonEvent, Button
 
 routes = web.RouteTableDef()
 
+routes.static('/static', 'static/')
 
-routes.static('/', 'static/')
+
+@routes.get('/')
+async def redirect_to_static_html(request: web.Request) -> web.StreamResponse:
+    return web.HTTPFound('/static/index.html')
 
 
 @routes.get('/api/v1/studios')
@@ -23,7 +27,7 @@ async def button_press(request: web.Request) -> web.StreamResponse:
 
     await event.studio.dispatcher_button_event_queue.put(event)
 
-    return web.json_response()
+    return web.json_response({})
 
 
 @routes.get('/api/v1/leds/{studio_name}')

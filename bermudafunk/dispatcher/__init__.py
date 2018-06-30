@@ -11,7 +11,12 @@ from bermudafunk import GPIO, base
 
 logger = logging.getLogger(__name__)
 
-audit_logger = logger
+audit_logger = logging.Logger(__name__)
+if not audit_logger.hasHandlers():
+    import sys
+
+    stdout_handler = logging.StreamHandler(stream=sys.stdout)
+    audit_logger.addHandler(stdout_handler)
 
 
 @enum.unique
