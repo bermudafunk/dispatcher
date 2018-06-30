@@ -29,6 +29,6 @@ if __name__ == '__main__':
         ]
     )
 
-    bermudafunk.base.start_cleanup_aware_coro(web.run)
+    bermudafunk.base.start_cleanup_aware_coroutine(web.run)
 
     base.run_loop()

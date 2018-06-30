@@ -189,8 +189,8 @@ class Dispatcher:
         self._on_air_studio = self._automat_studio
 
         self._symnet_controller.add_observer(self._set_current_state)
-        base.start_cleanup_aware_coro(self._assure_current_state_loop)
-        base.start_cleanup_aware_coro(self._process_studio_button_events)
+        base.start_cleanup_aware_coroutine(self._assure_current_state_loop)
+        base.start_cleanup_aware_coroutine(self._process_studio_button_events)
         base.cleanup_tasks.append(base.loop.create_task(self._cleanup()))
 
         self._assure_hourly_timer()

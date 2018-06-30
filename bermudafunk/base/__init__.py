@@ -45,7 +45,7 @@ def stop():
     loop.stop()
 
 
-def start_cleanup_aware_coro(org_func):
+def start_cleanup_aware_coroutine(org_func):
     async def cleanup_task():
         await cleanup_event.wait()
         main_task.cancel()

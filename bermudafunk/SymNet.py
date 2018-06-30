@@ -231,7 +231,7 @@ class SymNetDevice:
 
     async def _process_push_messages(self):
         while True:
-            cs = await self._state_queue.get()  # type: SymNetawControllerState
+            cs = await self._state_queue.get()  # type: SymNetRawControllerState
             logger.debug("received some pushed data - handover to the controller object")
             if cs.controller_number in self.controllers:
                 self.controllers[cs.controller_number]._set_raw_value(cs.controller_value)
