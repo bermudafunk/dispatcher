@@ -7,12 +7,11 @@ from bermudafunk import base
 
 logger = logging.getLogger(__name__)
 
-SymNetRawControllerState = typing.NamedTuple('SymNetRawControllerState',
-                                             [('controller_number', int), ('controller_value', int)])
+SymNetRawControllerState = typing.NamedTuple('SymNetRawControllerState', [('controller_number', int), ('controller_value', int)])
 
 
 class SymNetRawProtocolCallback:
-    def __init__(self, callback, expected_lines, regex=None):
+    def __init__(self, callback: typing.Callable, expected_lines: int, regex: str = None):
         self._callback = callback
         self.expected_lines = expected_lines
         self.regex = regex
@@ -31,14 +30,14 @@ class SymNetRawProtocol(asyncio.DatagramProtocol):
     def __init__(self, state_queue: asyncio.Queue):
         logger.debug("init a SymNetRawProtocol")
         self.transport = None
-        self.callback_queue = []
+        self.callback_queue = []  # type: typing.List[SymNetRawProtocolCallback]
         self.state_queue = state_queue
 
-    def connection_made(self, transport):
+    def connection_made(self, transport: asyncio.BaseTransport):
         logger.debug("connection established")
         self.transport = transport
 
-    def datagram_received(self, data, addr):
+    def datagram_received(self, data: bytes, address):
         logger.debug("a datagram was received - %d bytes", len(data))
         data_str = data.decode()
         lines = data_str.split('\r')
@@ -93,7 +92,7 @@ class SymNetRawProtocol(asyncio.DatagramProtocol):
         logger.error('Error received %s', exc)
         pass
 
-    def write(self, data):
+    def write(self, data: str):
         logger.debug('send data to symnet %s', data)
         self.transport.sendto(data.encode())
 
@@ -101,7 +100,7 @@ class SymNetRawProtocol(asyncio.DatagramProtocol):
 class SymNetController:
     value_timeout = 10  # in seconds
 
-    def __init__(self, controller_number, protocol: SymNetRawProtocol):
+    def __init__(self, controller_number: int, protocol: SymNetRawProtocol):
         logger.debug('create new SymNetController with %d', controller_number)
         self.controller_number = int(controller_number)
         self.proto = protocol
@@ -109,26 +108,26 @@ class SymNetController:
         self.raw_value = 0
         self.raw_value_time = 0
 
-        self.observer = []
+        self.observer = []  # type: typing.List[typing.Callable]
 
         base.loop.run_until_complete(self._retrieve_current_state().future)
 
-    def add_observer(self, callback):
+    def add_observer(self, callback: typing.Callable):
         logger.debug("add a observer (%s) to controller %d", callback, self.controller_number)
         return self.observer.append(callback)
 
-    def remove_observer(self, callback):
+    def remove_observer(self, callback: typing.Callable):
         logger.debug("remove a observer (%s) to controller %d", callback, self.controller_number)
         return self.observer.remove(callback)
 
-    async def _get_raw_value(self):
+    async def _get_raw_value(self) -> int:
         logger.debug('retrieve current value for controller %d', self.controller_number)
         if base.loop.time() - self.raw_value_time > self.value_timeout:
             logger.debug('value timeout - refresh')
             await self._retrieve_current_state().future
         return self.raw_value
 
-    def _set_raw_value(self, value):
+    def _set_raw_value(self, value: int):
         logger.debug('set_raw_value called on %d with %d', self.controller_number, value)
         old_value = self.raw_value
         self.raw_value = value
@@ -173,21 +172,21 @@ class SymNetController:
 
 
 class SymNetSelectorController(SymNetController):
-    def __init__(self, controller_number: int, selector_count: int, protocol: SymNetRawProtocol):
+    def __init__(self, controller_number: int, position_cont: int, protocol: SymNetRawProtocol):
         super().__init__(controller_number, protocol)
 
-        self._sc = int(selector_count)
+        self._position_count = int(position_cont)
 
     @property
-    def selector_count(self) -> int:
-        return self._sc
+    def position_count(self) -> int:
+        return self._position_count
 
     async def get_position(self):
-        return int(round(await self._get_raw_value() / 65535 * (self.selector_count - 1) + 1))
+        return int(round(await self._get_raw_value() / 65535 * (self.position_count - 1) + 1))
 
-    async def set_position(self, position):
-        assert 1 <= position <= self.selector_count
-        self._set_raw_value(int(round((position - 1) / (self.selector_count - 1) * 65535)))
+    async def set_position(self, position: int):
+        assert 1 <= position <= self.position_count
+        self._set_raw_value(int(round((position - 1) / (self.position_count - 1) * 65535)))
         await self._assure_current_state().future
 
 
@@ -203,7 +202,7 @@ class SymNetButtonController(SymNetController):
     async def pressed(self):
         return await self._get_raw_value() > 0
 
-    def set(self, state):
+    def set(self, state: bool):
         if state:
             return self.on()
         else:
@@ -211,7 +210,9 @@ class SymNetButtonController(SymNetController):
 
 
 class SymNetDevice:
-    def __init__(self, local_address, remote_address):
+    controllers = ...  # type: typing.Dict[int, SymNetController]
+
+    def __init__(self, local_address: typing.Tuple[str, int], remote_address: typing.Tuple[str, int]):
         self._state_queue = asyncio.Queue(loop=base.loop)
 
         def create_protocol() -> asyncio.DatagramProtocol:
@@ -236,7 +237,7 @@ class SymNetDevice:
             if cs.controller_number in self.controllers:
                 self.controllers[cs.controller_number]._set_raw_value(cs.controller_value)
 
-    def define_controller(self, controller_number) -> SymNetController:
+    def define_controller(self, controller_number: int) -> SymNetController:
         logger.debug('create new controller %d on symnet device', controller_number)
         controller_number = int(controller_number)
         controller = SymNetController(controller_number, self.protocol)
@@ -244,15 +245,15 @@ class SymNetDevice:
 
         return controller
 
-    def define_selector(self, controller_number: int, selector_count: int) -> SymNetSelectorController:
+    def define_selector(self, controller_number: int, position_count: int) -> SymNetSelectorController:
         logger.debug('create new selector %d on symnet device', controller_number)
         controller_number = int(controller_number)
-        controller = SymNetSelectorController(controller_number, selector_count, self.protocol)
+        controller = SymNetSelectorController(controller_number, position_count, self.protocol)
         self.controllers[controller_number] = controller
 
         return controller
 
-    def define_button(self, controller_number) -> SymNetButtonController:
+    def define_button(self, controller_number: int) -> SymNetButtonController:
         logger.debug('create new button %d on symnet device', controller_number)
         controller_number = int(controller_number)
         controller = SymNetButtonController(controller_number, self.protocol)
