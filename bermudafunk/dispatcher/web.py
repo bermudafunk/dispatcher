@@ -1,63 +1,63 @@
 from aiohttp import web
 
 import bermudafunk.base
-from bermudafunk.dispatcher import Studio, ButtonEvent, Button
-
-routes = web.RouteTableDef()
-
-routes.static('/static', 'static/')
+from bermudafunk.dispatcher import Studio, ButtonEvent, Button, Dispatcher
 
 
-@routes.get('/')
-async def redirect_to_static_html(request: web.Request) -> web.StreamResponse:
-    return web.HTTPFound('/static/index.html')
+async def run(dispatcher: Dispatcher):
+    routes = web.RouteTableDef()
 
+    routes.static('/static', 'static/')
 
-@routes.get('/api/v1/studios')
-async def list_studios(request: web.Request) -> web.StreamResponse:
-    return web.json_response(list(Studio.names.keys()))
+    @routes.get('/')
+    async def redirect_to_static_html(request: web.Request) -> web.StreamResponse:
+        return web.HTTPFound('/static/index.html')
 
+    @routes.get('/api/v1/generate_state_machine_image')
+    async def generate_machine_image(request: web.Request) -> web.StreamResponse:
+        dispatcher._machine.get_graph().draw('static/my_state_diagram.png', prog='dot')
+        return web.HTTPFound('/static/my_state_diagram.png')
 
-@routes.get('/api/v1/press/{studio_name}/{button}')
-async def button_press(request: web.Request) -> web.StreamResponse:
-    event = ButtonEvent(
-        studio=Studio.names[request.match_info['studio_name']],
-        button=Button(request.match_info['button'])
-    )
+    @routes.get('/api/v1/studios')
+    async def list_studios(request: web.Request) -> web.StreamResponse:
+        return web.json_response(list(Studio.names.keys()))
 
-    await event.studio.dispatcher_button_event_queue.put(event)
+    @routes.get('/api/v1/press/{studio_name}/{button}')
+    async def button_press(request: web.Request) -> web.StreamResponse:
+        event = ButtonEvent(
+            studio=Studio.names[request.match_info['studio_name']],
+            button=Button(request.match_info['button'])
+        )
 
-    return web.json_response({})
+        await event.studio.dispatcher_button_event_queue.put(event)
 
+        return web.json_response({})
 
-@routes.get('/api/v1/leds/{studio_name}')
-async def led_status(request: web.Request) -> web.StreamResponse:
-    studio = Studio.names[request.match_info['studio_name']]
+    @routes.get('/api/v1/leds/{studio_name}')
+    async def led_status(request: web.Request) -> web.StreamResponse:
+        studio = Studio.names[request.match_info['studio_name']]
 
-    return web.json_response({
-        'immediate':
-            {
-                'state': studio.immediate_led.state.name,
-                'blink_freq': studio.immediate_led.blink_freq
-            },
-        'takeover':
-            {
-                'state': studio.takeover_led.state.name,
-                'blink_freq': studio.takeover_led.blink_freq
-            },
-        'release':
-            {
-                'state': studio.release_led.state.name,
-                'blink_freq': studio.release_led.blink_freq
-            },
-    })
+        return web.json_response({
+            'immediate':
+                {
+                    'state': studio.immediate_led.state.name,
+                    'blink_freq': studio.immediate_led.blink_freq
+                },
+            'takeover':
+                {
+                    'state': studio.takeover_led.state.name,
+                    'blink_freq': studio.takeover_led.blink_freq
+                },
+            'release':
+                {
+                    'state': studio.release_led.state.name,
+                    'blink_freq': studio.release_led.blink_freq
+                },
+        })
 
+    app = web.Application()
+    app.add_routes(routes)
 
-app = web.Application()
-app.add_routes(routes)
-
-
-async def run():
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, '192.168.0.133', 8080)

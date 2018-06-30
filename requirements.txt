@@ -2,3 +2,5 @@ rpi.gpio
 aiohttp
 cchardet
 aiodns
+transitions
+pygraphviz

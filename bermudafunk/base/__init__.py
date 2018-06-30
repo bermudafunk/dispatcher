@@ -12,6 +12,7 @@ logging.basicConfig(format='%(asctime)s : %(levelname)8s : %(name)30s : %(funcNa
 if config.DEBUG:
     logging.getLogger('bermudafunk').setLevel(logging.DEBUG)
     logging.getLogger('bermudafunk.SymNet').setLevel(logging.ERROR)
+    logging.getLogger('transitions').setLevel(logging.INFO)
 
 logger = logging.getLogger(__name__)
 

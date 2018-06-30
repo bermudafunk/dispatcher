@@ -6,6 +6,10 @@ import time
 import typing
 from collections import namedtuple
 
+from transitions import EventData
+from transitions.extensions import GraphMachine as Machine
+from transitions.extensions.diagrams import Graph
+
 import bermudafunk.SymNet
 from bermudafunk import GPIO, base
 
@@ -17,6 +21,9 @@ if not audit_logger.hasHandlers():
 
     stdout_handler = logging.StreamHandler(stream=sys.stdout)
     audit_logger.addHandler(stdout_handler)
+
+Graph.style_attributes['node']['default']['shape'] = 'octagon'
+Graph.style_attributes['node']['active']['shape'] = 'doubleoctagon'
 
 
 @enum.unique
@@ -152,30 +159,54 @@ class Dispatcher:
     def __init__(self,
                  symnet_controller: bermudafunk.SymNet.SymNetSelectorController,
                  automat_selector_value: int,
-                 studio_mapping: typing.List[DispatcherStudioDefinition]
+                 studio_mapping: typing.List[DispatcherStudioDefinition],
+                 audit_internal_state=True
                  ):
+
+        if audit_internal_state:
+            def _x_get(self):
+                return self.__x
+
+            def _x_set(self, new_val: Studio):
+                if self.__x is new_val:
+                    return
+                logger.debug('change _x to %s', new_val)
+                self.__x = new_val
+
+            def _y_get(self):
+                return self.__y
+
+            def _y_set(self, new_val: Studio):
+                if self.__y is new_val:
+                    return
+                logger.debug('change _y to %s', new_val)
+                self.__y = new_val
+
+            def _on_air_selector_value_get(self):
+                return self.__on_air_selector_value
+
+            def _on_air_selector_value_set(self, new_val: int):
+                if self.__on_air_selector_value is new_val:
+                    return
+                logger.debug('change _on_air_selector_value to %s', new_val)
+                self.__on_air_selector_value = new_val
+
+            Dispatcher._x = property(_x_get, _x_set)
+            Dispatcher._y = property(_y_get, _y_set)
+            Dispatcher._on_air_selector_value = property(_on_air_selector_value_get, _on_air_selector_value_set)
 
         self.immediate_state_time = 5 * 60  # seconds
         self.immediate_release_time = 30  # seconds
 
         self._symnet_controller = symnet_controller
 
-        self._takeover_state_value = None  # type: typing.Optional[Studio]
-        self._release_state_value = None  # type: typing.Optional[Studio]
-        self._immediate_state_value = None  # type: typing.Optional[Studio]
-
-        self._hourly_timer = None  # type: typing.Optional[asyncio.Task]
+        self._next_hour_timer = None  # type: typing.Optional[asyncio.Task]
         self._immediate_state_timer = None  # type: typing.Optional[asyncio.Task]
         self._immediate_release_timer = None  # type: typing.Optional[asyncio.Task]
 
-        self._immediate_release_lock = asyncio.Lock(loop=base.loop)
-
-        self._automat_studio = Studio('automat')
-        studio_mapping = list(studio_mapping) + [
-            DispatcherStudioDefinition(studio=self._automat_studio, selector_value=automat_selector_value)
-        ]
-
         self._dispatcher_button_event_queue = asyncio.Queue(maxsize=1, loop=base.loop)
+
+        self._automat_selector_value = automat_selector_value
 
         self._studios = []  # type: typing.List[Studio]
         self._studios_to_selector_value = {}  # type: typing.Dict[Studio, int]
@@ -186,201 +217,196 @@ class Dispatcher:
             self._selector_value_to_studio[studio_def.selector_value] = studio_def.studio
             studio_def.studio.dispatcher_button_event_queue = self._dispatcher_button_event_queue
 
-        self._on_air_studio = self._automat_studio
+        assert self._automat_selector_value not in self._selector_value_to_studio.keys()
 
+        # State machine values
+
+        self.__on_air_selector_value = 0  # type: int
+        self._on_air_selector_value = self._automat_selector_value
+        self.__x = None
+        self.__y = None
+        self._x = None  # type: typing.Optional[Studio]
+        self._y = None  # type: typing.Optional[Studio]
+
+        # State machine initialization
+
+        states = [
+            'automat_on_air',
+            'automat_on_air_immediate_state_X',
+            'from_automat_change_to_studio_X_on_next_hour',
+            'studio_X_on_air',
+            'from_studio_X_change_to_automat_on_next_hour',
+            'studio_X_on_air_immediate_state',
+            'studio_X_on_air_immediate_release',
+            'from_studio_X_change_to_studio_Y_on_next_hour',
+        ]
+
+        self._machine = Machine(states=states,
+                                initial='automat_on_air',
+                                auto_transitions=False,
+                                ignore_invalid_triggers=True,
+                                send_event=True,
+                                before_state_change=[self._before_state_change],
+                                after_state_change=[self._after_state_change],
+                                finalize_event=[self._audit_state]
+                                )
+
+        self._machine.add_transition(trigger='takeover_X', source='automat_on_air', dest='from_automat_change_to_studio_X_on_next_hour')
+        self._machine.add_transition(trigger='immediate_X', source='automat_on_air', dest='automat_on_air_immediate_state_X')
+
+        self._machine.add_transition(trigger='takeover_X', source='automat_on_air_immediate_state_X', dest='studio_X_on_air')
+        self._machine.add_transition(trigger='release_X', source='automat_on_air_immediate_state_X', dest='automat_on_air')
+        self._machine.add_transition(trigger='immediate_X', source='automat_on_air_immediate_state_X', dest='automat_on_air')
+        self._machine.add_transition(trigger='immediate_state_timeout', source='automat_on_air_immediate_state_X', dest='automat_on_air')
+
+        self._machine.add_transition(trigger='takeover_X', source='from_automat_change_to_studio_X_on_next_hour', dest='automat_on_air')
+        self._machine.add_transition(trigger='release_X', source='from_automat_change_to_studio_X_on_next_hour', dest='automat_on_air')
+        self._machine.add_transition(trigger='next_hour', source='from_automat_change_to_studio_X_on_next_hour', dest='studio_X_on_air')
+
+        self._machine.add_transition(trigger='release_X', source='studio_X_on_air', dest='from_studio_X_change_to_automat_on_next_hour')
+        self._machine.add_transition(trigger='immediate_X', source='studio_X_on_air', dest='studio_X_on_air_immediate_state')
+
+        self._machine.add_transition(trigger='takeover_X', source='from_studio_X_change_to_automat_on_next_hour', dest='studio_X_on_air')
+        self._machine.add_transition(trigger='release_X', source='from_studio_X_change_to_automat_on_next_hour', dest='studio_X_on_air')
+        self._machine.add_transition(trigger='takeover_Y', source='from_studio_X_change_to_automat_on_next_hour', dest='from_studio_X_change_to_studio_Y_on_next_hour')
+        self._machine.add_transition(trigger='next_hour', source='from_studio_X_change_to_automat_on_next_hour', dest='automat_on_air')
+
+        self._machine.add_transition(trigger='immediate_X', source='studio_X_on_air_immediate_state', dest='studio_X_on_air')
+        self._machine.add_transition(trigger='immediate_state_timeout', source='studio_X_on_air_immediate_state', dest='studio_X_on_air')
+        self._machine.add_transition(trigger='release_X', source='studio_X_on_air_immediate_state', dest='studio_X_on_air_immediate_release')
+
+        self._machine.add_transition(trigger='takeover_X', source='studio_X_on_air_immediate_release', dest='studio_X_on_air_immediate_state')
+        self._machine.add_transition(trigger='release_X', source='studio_X_on_air_immediate_release', dest='studio_X_on_air_immediate_state')
+        self._machine.add_transition(trigger='takeover_Y', source='studio_X_on_air_immediate_release', dest='studio_X_on_air', before=[self._prepare_change_to_Y])
+        self._machine.add_transition(trigger='immediate_release_timeout', source='studio_X_on_air_immediate_release', dest='automat_on_air')
+
+        self._machine.add_transition(trigger='takeover_Y', source='from_studio_X_change_to_studio_Y_on_next_hour', dest='from_studio_X_change_to_automat_on_next_hour')
+        self._machine.add_transition(trigger='release_Y', source='from_studio_X_change_to_studio_Y_on_next_hour', dest='from_studio_X_change_to_automat_on_next_hour')
+        self._machine.add_transition(trigger='next_hour', source='from_studio_X_change_to_studio_Y_on_next_hour', dest='studio_X_on_air', before=[self._prepare_change_to_Y])
+
+        self._machine.on_enter_automat_on_air(self._change_to_automat)
+        self._machine.on_enter_studio_X_on_air(self._change_to_studio)
+
+        # Start timers
         self._symnet_controller.add_observer(self._set_current_state)
         base.start_cleanup_aware_coroutine(self._assure_current_state_loop)
         base.start_cleanup_aware_coroutine(self._process_studio_button_events)
         base.cleanup_tasks.append(base.loop.create_task(self._cleanup()))
 
-        self._assure_hourly_timer()
+    def get_on_air_studio_name(self):
+        if self._on_air_selector_value == self._automat_selector_value:
+            return 'automat'
+        return self._selector_value_to_studio[self._on_air_selector_value].name
+
+    def _prepare_change_to_Y(self, _: EventData = None):
+        self._x, self._y = self._y, None
+
+    def _change_to_automat(self, _: EventData):
+        logger.debug('change to automat')
+        self._on_air_selector_value = self._automat_selector_value
+        base.loop.create_task(self._set_current_state())
+
+    def _change_to_studio(self, _: EventData):
+        logger.debug('change to studio %s', self._x)
+        self._on_air_selector_value = self._studios_to_selector_value[self._x]
+        base.loop.create_task(self._set_current_state())
+
+    def _before_state_change(self, event: EventData):
+        # check if button event
+        if 'button_event' in event.kwargs.keys():
+            button_event = event.kwargs.get('button_event')  # type: ButtonEvent
+            event_name = event.event.name
+            if 'X' in event_name:
+                self._x = button_event.studio
+            elif 'Y' in event_name:
+                self._y = button_event.studio
+
+        source_transition = event.transition.source
+        if 'next_hour' in source_transition:
+            self._stop_next_hour_timer()
+        elif 'immediate_state' in source_transition:
+            self._stop_immediate_state_timer()
+        elif 'immediate_release' in source_transition:
+            self._stop_immediate_release_timer()
+
+    def _after_state_change(self, event: EventData):
+        for tmp in ['X', 'Y']:
+            if tmp not in event.transition.dest:
+                setattr(self, '_' + tmp, None)
+
+        # start timers
+        destination_transition = event.transition.dest
+        if 'next_hour' in destination_transition:
+            self._start_next_hour_timer()
+        elif 'immediate_state' in destination_transition:
+            self._start_immediate_state_timer()
+        elif 'immediate_release' in destination_transition:
+            self._start_immediate_release_timer()
 
     async def _cleanup(self):
         await base.cleanup_event.wait()
         logger.debug('cleanup timers')
-        self._stop_timers()
+        self._stop_next_hour_timer()
+        self._stop_immediate_state_timer()
+        self._stop_immediate_release_timer()
 
     async def _process_studio_button_events(self):
         while True:
             event = await self._dispatcher_button_event_queue.get()  # type: ButtonEvent
             logger.debug('got new event %s, process now', event)
 
-            await self._change_state(event)
+            # TODO: Do machine state change
+            append = '_X'
+            if self._x is not None:
+                if self._x != event.studio:
+                    append = '_Y'
 
-            self._assure_led_status()
+            self._machine.trigger(event.button.name + append, button_event=event)
 
             self._audit_state()
 
-    async def _change_state(self, event: ButtonEvent):
-        if self._on_air_studio == self._automat_studio:
-            audit_logger.info("Zustand: Automation on Air")
-            if event.button is Button.takeover:
-                audit_logger.info("Studio X drückt „Übernahme“")
-                if self._immediate_state_value is None:
-                    audit_logger.info("→ nicht „Sofort-Status“")
-                    if self._takeover_state_value is None:
-                        audit_logger.info("→ noch nicht von anderswo angefordert")
-                        audit_logger.info("→ Übernahme anfordern → zum Stundenwechsel wird hierher umgeschaltet")
-                        self._takeover_state_value = event.studio
-                    elif self._takeover_state_value == event.studio:
-                        audit_logger.info("→ schon vom eigenen Studio Übernahme angefordert")
-                        audit_logger.info("→ Anforderung löschen")
-                        self._takeover_state_value = None
-                elif self._immediate_state_value == event.studio:
-                    audit_logger.info("→ schon „Sofort-Status“ vom eigenen Studio aktiviert")
-                    audit_logger.info("→ sofortige Übernahme")
-                    await self._do_immediate_takeover(event.studio)
-
-            elif event.button is Button.release:
-                audit_logger.info("Studio X drückt „Freigabe“")
-                audit_logger.info("→ Rücksetzung aller eigenen Anforderungen (Übernahme/ Sofort-Status)")
-                if self._takeover_state_value == event.studio:
-                    self._takeover_state_value = None
-                if self._release_state_value == event.studio:
-                    self._release_state_value = None
-                if self._immediate_state_value == event.studio:
-                    self._stop_immediate_timers()
-                    self._immediate_state_value = None
-                    self._assure_hourly_timer()
-
-            elif event.button is Button.immediate:
-                audit_logger.info("Studio X drückt „Sofort“")
-                if self._immediate_state_value is None:
-                    audit_logger.info("→ Sofort-Status war noch nicht gesetzt")
-                    audit_logger.info("→ Sofort-Status wird für das eigene Studio für die Dauer von 5 Minuten gesetzt")
-                    self._stop_immediate_timers()
-                    self._immediate_state_value = event.studio
-                    self._start_immediate_state_timer()
-
-                elif self._immediate_state_value == event.studio:
-                    audit_logger.info("→ Sofort-Status für das eigene Studio war schon gesetzt")
-                    audit_logger.info("→ Sofort-Status wieder löschen")
-                    self._immediate_state_value = None
-                    self._stop_immediate_timers()
-                    self._assure_hourly_timer()
-
-        elif self._on_air_studio == event.studio:
-            audit_logger.info("Zustand: Studio X ist on Air und drückt Buttons")
-            if event.button is Button.takeover:
-                audit_logger.info("Studio X drückt „Übernahme“")
-                if self._release_state_value == event.studio:
-                    audit_logger.info("→ Wenn Freigabe oder Sofort-Freigabe von uns schon erteilt")
-                    if self._takeover_state_value is None:
-                        audit_logger.info("→ Noch keine andere Übernahme-Anforderung")
-                        audit_logger.info("→ Freigabe löschen")
-                        self._release_state_value = None
-
-            elif event.button is Button.release:
-                audit_logger.info("Studio X drückt „Freigabe“")
-                if self._immediate_state_value is None:
-                    audit_logger.info("→ Wenn kein Sofort-Status gesetzt")
-                    if self._release_state_value is None:
-                        audit_logger.info("→ Wenn noch nicht Freigabe erteilt")
-                        audit_logger.info("→ Freigabe erteilen → Zum Stundenwechsel wird umgeschaltet")
-                        self._release_state_value = event.studio
-                    elif self._release_state_value == event.studio:
-                        audit_logger.info("→ Wenn Freigabe schon erteilt")
-                        if self._takeover_state_value is None:
-                            audit_logger.info("→ Übernahme noch nicht angefordert")
-                            audit_logger.info("→ Freigabe wieder löschen")
-                            self._release_state_value = None
-                elif self._immediate_state_value == event.studio:
-                    audit_logger.info("→ Wenn Sofort-Status gesetzt")
-                    if self._release_state_value is None:
-                        audit_logger.info("→ Noch keine Sofort-Freigabe gestartet")
-                        audit_logger.info("→ Sofort-Freigabe starten → Nach 30 Sekunden auf Automation umschalten")
-                        self._stop_hourly_timer()
-                        self._release_state_value = event.studio
-                        self._start_immediate_release_timer()
-                    elif self._release_state_value == event.studio:
-                        audit_logger.info("→ Sofort-Freigabe bereits gestartet")
-                        audit_logger.info("→ Sofort-Freigabe abbrechen")
-                        self._release_state_value = None
-                        self._stop_immediate_release_timer()
-                        self._assure_hourly_timer()
-
-            elif event.button is Button.immediate:
-                audit_logger.info("Studio X drück „Sofort-Button“")
-                if self._immediate_state_value is None:
-                    audit_logger.info("→ Wenn kein Sofort-Status gesetzt ist")
-                    audit_logger.info("→ Sofort-Status setzen")
-                    self._immediate_state_value = event.studio
-                    self._start_immediate_state_timer()
-                elif self._immediate_state_value == event.studio:
-                    audit_logger.info("→ Wenn Sofort-Status schon gesetzt")
-                    audit_logger.info("→ Sofort-Status wieder löschen")
-                    self._immediate_state_value = None
-                    self._stop_immediate_timers()
-                    self._assure_hourly_timer()
-
-        elif self._on_air_studio != event.studio:
-            audit_logger.info("Zustand: Studio X ist on Air und Studio Y drückt Buttons")
-            if event.button is Button.takeover:
-                audit_logger.info("Studio Y drückt „Übernahme“")
-                if self._release_state_value == self._on_air_studio and self._immediate_state_value == self._on_air_studio:
-                    audit_logger.info("→ Wenn Sofort-Freigabe aktiviert ist")
-                    audit_logger.info("→ Sofortige Übernahme")
-                    await self._do_immediate_takeover(event.studio)
-                else:
-                    audit_logger.info("Sonst")
-                    if self._takeover_state_value is None:
-                        audit_logger.info("→ Wenn kein anderes Studio bereits Übernahme angefordert hat")
-                        audit_logger.info("→ Übernahme anfordern")
-                        self._takeover_state_value = event.studio
-                    elif self._takeover_state_value == event.studio:
-                        audit_logger.info("→ Wenn selbst schon Übernahme angefordert")
-                        audit_logger.info("→ Übernahme-Anforderung löschen")
-                        self._takeover_state_value = None
+            self._assure_led_status()
 
     def _assure_led_status(self):
         pass  # TODO
 
-    def _audit_state(self):
-        pass  # TODO
+    def _audit_state(self, _: EventData = None):
+        state = self._machine.state
+        if 'X' in state:
+            if self._x is None:
+                logger.critical('X in state and self._X is None')
+        else:
+            if self._x is not None:
+                logger.critical('X not in state and self._X is not None')
 
-    async def _switch_to_studio(self, studio: Studio):
-        logger.info('Wechsel zu Studio %s', studio)
-        audit_logger.warning('Wechsel zu Studio %s', studio)
-
-        self._on_air_studio = studio
-        await self._set_current_state()
-
-        self._takeover_state_value = None
-        self._release_state_value = None
-        self._stop_immediate_release_timer()
-        self._assure_hourly_timer()
-
-    async def _do_immediate_takeover(self, to_studio: Studio):
-        logger.info('Sofort-Wechsel zu Studio %s', to_studio)
-        audit_logger.warning('Sofort-Wechsel zu Studio %s', to_studio)
-        self._takeover_state_value = None
-        self._release_state_value = None
-        self._immediate_state_value = None
-        self._stop_timers()
-        await self._switch_to_studio(to_studio)
-        self._assure_hourly_timer()
+        if 'Y' in state:
+            if self._y is None:
+                logger.critical('Y in state and self._Y is None')
+        else:
+            if self._y is not None:
+                logger.critical('Y not in state and self._Y is not None')
 
     async def _assure_current_state_loop(self):
         while True:
             logger.debug('Assure that the controller have the desired state!')
-            await self._symnet_controller.set_position(self._studios_to_selector_value[self._on_air_studio])
+            await self._set_current_state()
             await asyncio.sleep(300)
 
-    async def _set_current_state(self, *args, **kwargs):
-        logger.debug('The the controller state now!')
-        await self._symnet_controller.set_position(self._studios_to_selector_value[self._on_air_studio])
+    async def _set_current_state(self, *_, **__):
+        logger.debug('Set the controller state now!')
+        await self._symnet_controller.set_position(self._automat_selector_value)
 
-    def _assure_hourly_timer(self):
-        if self._hourly_timer and not self._hourly_timer.done():
+    def _start_next_hour_timer(self, _: EventData = None):
+        if self._next_hour_timer and not self._next_hour_timer.done():
             return
 
-        self._hourly_timer = base.loop.create_task(self.__hour_timer())
+        self._next_hour_timer = base.loop.create_task(self.__hour_timer())
 
     async def __hour_timer(self):
         logger.debug('start hour timer')
 
-        while True:
-            next_hour_timestamp = self.__calc_next_hour_timestamp()
+        try:
+            next_hour_timestamp = calc_next_hour_timestamp()
             duration_to_next_hour = next_hour_timestamp - time.time()
             while duration_to_next_hour > 0:
                 logger.debug('duration to next full hour %s', duration_to_next_hour)
@@ -394,86 +420,61 @@ class Dispatcher:
                 duration_to_next_hour = next_hour_timestamp - time.time()
 
             logger.info('hourly event %s', time.strftime('%Y-%m-%dT%H:%M:%S%z'))
-            with await self._immediate_release_lock:
-                if self._on_air_studio == self._automat_studio:
-                    if self._takeover_state_value is not None:
-                        self._switch_to_studio(self._takeover_state_value)
-
-                if self._on_air_studio == self._release_state_value:
-                    if self._takeover_state_value is not None:
-                        self._switch_to_studio(self._takeover_state_value)
-                    else:
-                        self._switch_to_studio(self._automat_studio)
+            self._machine.next_hour()
 
             self._assure_led_status()
-            self._audit_state()
+        finally:
+            self._next_hour_timer = None
 
-            await asyncio.sleep(1)
+    def _stop_next_hour_timer(self, _: EventData = None):
+        if self._next_hour_timer:
+            self._next_hour_timer.cancel()
+            self._next_hour_timer = None
 
-    @staticmethod
-    def __calc_next_hour_timestamp(minutes=0, seconds=0):
-        next_datetime = datetime.datetime.now().replace(minute=minutes, second=seconds) + datetime.timedelta(hours=1)
-        next_timestamp = next_datetime.timestamp()
-        if next_timestamp - time.time() > 3600:
-            next_timestamp -= 3600
-        return next_timestamp
-
-    def _start_immediate_state_timer(self):
-        if self._immediate_state_timer is not None:
-            logger.error('Called, but a timer is already running')
+    def _start_immediate_state_timer(self, _: EventData = None):
+        if self._immediate_state_timer and not self._immediate_state_timer.done():
             return
 
         self._immediate_state_timer = base.loop.create_task(self.__immediate_state_timer())
 
     async def __immediate_state_timer(self):
+        logger.debug('start immediate state timer')
+
         try:
             await asyncio.sleep(self.immediate_state_time)
-            with await self._immediate_release_lock:
-                self._immediate_state_value = None
-                self._immediate_state_timer = None
-        except asyncio.CancelledError:
+            self._machine.immediate_state_timeout()
+        finally:
             self._immediate_state_timer = None
 
-    def _start_immediate_release_timer(self):
-        if self._immediate_release_timer is not None:
-            logger.error('Called, but a timer is already running')
+    def _stop_immediate_state_timer(self, _: EventData = None):
+        if self._immediate_state_timer:
+            self._immediate_state_timer.cancel()
+            self._immediate_state_timer = None
+
+    def _start_immediate_release_timer(self, _: EventData = None):
+        logger.debug('start immediate release timer')
+
+        if self._immediate_release_timer and self._immediate_release_timer.done():
             return
 
         self._immediate_release_timer = base.loop.create_task(self.__immediate_release_timer())
 
     async def __immediate_release_timer(self):
         try:
-            with await self._immediate_release_lock:
-                await asyncio.sleep(self.immediate_release_time)
-                if self._takeover_state_value is None:
-                    await self._switch_to_studio(self._automat_studio)
-                else:
-                    await self._switch_to_studio(self._takeover_state_value)
-                self._takeover_state_value = None
-                self._release_state_value = None
-                self._immediate_state_value = None
-        except asyncio.CancelledError:
+            await asyncio.sleep(self.immediate_release_time)
+            self._machine.immediate_release_timeout()
+        finally:
             self._immediate_release_timer = None
 
-    def _stop_timers(self):
-        self._stop_hourly_timer()
-        self._stop_immediate_timers()
-
-    def _stop_hourly_timer(self):
-        if self._hourly_timer:
-            self._hourly_timer.cancel()
-            self._hourly_timer = None
-
-    def _stop_immediate_timers(self):
-        self._stop_immediate_state_timer()
-        self._stop_immediate_release_timer()
-
-    def _stop_immediate_state_timer(self):
-        if self._immediate_state_timer:
-            self._immediate_state_timer.cancel()
-            self._immediate_state_timer = None
-
-    def _stop_immediate_release_timer(self):
+    def _stop_immediate_release_timer(self, _: EventData = None):
         if self._immediate_release_timer:
             self._immediate_release_timer.cancel()
             self._immediate_release_timer = None
+
+
+def calc_next_hour_timestamp(minutes=0, seconds=0):
+    next_datetime = datetime.datetime.now().replace(minute=minutes, second=seconds) + datetime.timedelta(hours=1)
+    next_timestamp = next_datetime.timestamp()
+    if next_timestamp - time.time() > 3600:
+        next_timestamp -= 3600
+    return next_timestamp
