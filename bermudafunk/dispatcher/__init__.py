@@ -5,6 +5,7 @@ import logging
 import random
 import time
 import typing
+import weakref
 from collections import namedtuple
 
 from transitions import EventData, MachineError
@@ -284,7 +285,7 @@ class Dispatcher:
                                 send_event=True,
                                 before_state_change=[self._before_state_change],
                                 after_state_change=[self._after_state_change],
-                                finalize_event=[self._audit_state, self._assure_led_status]
+                                finalize_event=[self._audit_state, self._assure_led_status, self._notify_machine_observers]
                                 )
         transitions = [
             {'trigger': 'takeover_X', 'source': States.AUTOMAT_ON_AIR, 'dest': States.FROM_AUTOMAT_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR},
@@ -345,6 +346,16 @@ class Dispatcher:
         base.start_cleanup_aware_coroutine(self._assure_current_state_loop)
         base.start_cleanup_aware_coroutine(self._process_studio_button_events)
         base.cleanup_tasks.append(base.loop.create_task(self._cleanup()))
+
+        self._machine_observers = weakref.WeakSet()  # type: typing.Set[typing.Callable[Dispatcher]]
+
+    def _notify_machine_observers(self, event: EventData):
+        for observer in self._machine_observers:
+            observer(self, event=event)
+
+    @property
+    def machine_observers(self):
+        return self._machine_observers
 
     @property
     def on_air_studio_name(self):
@@ -448,11 +459,13 @@ class Dispatcher:
             self._assure_led_status()
 
     def _assure_led_status(self, _: EventData = None):
+        # FIXME: This seems to be really in complete
         state = States(self._machine.state)
         for studio in self._studios:
             if self._x == studio:
                 # green led
-                if state is States.STUDIO_X_ON_AIR:
+                logger.debug(state)
+                if state in [States.STUDIO_X_ON_AIR, States.STUDIO_X_ON_AIR_IMMEDIATE_STATE, States.STUDIO_X_ON_AIR_IMMEDIATE_RELEASE]:
                     studio.green_led.state = GPIO.LedState.ON
                 elif state is States.FROM_AUTOMAT_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR:
                     studio.green_led.state = GPIO.LedState.BLINK
@@ -460,21 +473,28 @@ class Dispatcher:
                     studio.green_led.state = GPIO.LedState.OFF
 
                 # yellow led
-                if state is States.STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST:
+                if state in [States.STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST, States.STUDIO_X_ON_AIR_IMMEDIATE_RELEASE]:
                     studio.yellow_led.state = GPIO.LedState.BLINK
                 else:
                     studio.yellow_led.state = GPIO.LedState.OFF
 
                 # red led
-                if state is States.AUTOMAT_ON_AIR_IMMEDIATE_STATE_X or state is States.STUDIO_X_ON_AIR_IMMEDIATE_STATE or state is state.STUDIO_X_ON_AIR_IMMEDIATE_RELEASE:
+                if state is States.AUTOMAT_ON_AIR_IMMEDIATE_STATE_X or state is States.STUDIO_X_ON_AIR_IMMEDIATE_STATE:
                     studio.red_led.state = GPIO.LedState.ON
+                elif state is state.STUDIO_X_ON_AIR_IMMEDIATE_RELEASE:
+                    studio.red_led.state = GPIO.LedState.BLINK
                 else:
                     studio.red_led.state = GPIO.LedState.OFF
             elif self._y == studio:
-                pass
+                # FIXME: not useful right now
+                studio.green_led.state = GPIO.LedState.OFF
+                studio.yellow_led.state = GPIO.LedState.OFF
+                studio.red_led.state = GPIO.LedState.OFF
             else:
-                pass
-        pass  # TODO
+                # TODO: Is this useful?
+                studio.green_led.state = GPIO.LedState.OFF
+                studio.yellow_led.state = GPIO.LedState.OFF
+                studio.red_led.state = GPIO.LedState.OFF
 
     def _audit_state(self, _: EventData = None):
         state = self._machine.state

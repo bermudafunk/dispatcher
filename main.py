@@ -31,8 +31,6 @@ if __name__ == '__main__':
         ]
     )
 
-    import functools
-
-    bermudafunk.base.start_cleanup_aware_coroutine(functools.partial(web.run, dispatcher))
+    bermudafunk.base.loop.create_task(web.run(dispatcher))
 
     base.run_loop()

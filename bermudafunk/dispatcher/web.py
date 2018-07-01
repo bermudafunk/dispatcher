@@ -1,12 +1,20 @@
+import asyncio
 import functools
+import json
+import logging
+import weakref
 from concurrent.futures import ThreadPoolExecutor
 
+import aiohttp
 from aiohttp import web
 
 import bermudafunk.base
 from bermudafunk.dispatcher import Studio, ButtonEvent, Button, Dispatcher
 
+logger = logging.getLogger(__name__)
+
 _executor = ThreadPoolExecutor(max_workers=2)
+_websockets = weakref.WeakSet()
 
 
 def redraw_complete_graph(dispatcher: Dispatcher):
@@ -18,6 +26,10 @@ def redraw_graph(dispatcher: Dispatcher):
 
 
 async def run(dispatcher: Dispatcher):
+    observer_event = asyncio.Event()
+
+    app = web.Application()
+
     routes = web.RouteTableDef()
 
     routes.static('/static', 'static/')
@@ -61,12 +73,77 @@ async def run(dispatcher: Dispatcher):
 
         return web.json_response(studio.led_status)
 
-    app = web.Application()
+    @routes.get('/api/v1/ws')
+    async def websocket_status(request: web.Request) -> web.StreamResponse:
+        ws = web.WebSocketResponse()
+        await ws.prepare(request)
+
+        _websockets.add(ws)
+        await ws.send_str(dispatcher_status_msg())
+        for studio in dispatcher.studios:
+            await ws.send_str(led_status_msg(studio))
+
+        try:
+            async for msg in ws:
+                if msg.type == aiohttp.WSMsgType.TEXT:
+                    logger.debug(msg.data)
+                    if msg.data == 'close':
+                        logger.debug('received close message')
+                        await ws.close()
+                    else:
+                        try:
+                            req = json.loads(msg.data)
+                            logger.debug(req)
+                            if req['type'] == 'dispatcher.status':
+                                await ws.send_str(dispatcher_status_msg())
+                            elif req['type'] == 'studio.led.status':
+                                await ws.send_str(led_status_msg(Studio.names[req['studio']]))
+                        except json.JSONDecodeError as e:
+                            await ws.send_str(json.dumps({'kind': 'error', 'exception': str(e)}))
+                        except TypeError as e:
+                            await ws.send_str(json.dumps({'kind': 'error', 'exception': str(e)}))
+                elif msg.type == aiohttp.WSMsgType.ERROR:
+                    logger.debug('ws connection closed with exception %s', ws.exception())
+
+            logger.debug('websocket connection closed')
+            await ws.close()
+        finally:
+            _websockets.discard(ws)
+
+        return ws
+
+    async def close_remaining_websockets():
+        for ws in set(_websockets):
+            await ws.close(code=aiohttp.WSCloseCode.GOING_AWAY, message='Server shutdown')
+
+    def observer(*_, **__):
+        observer_event.set()
+
+    async def observer_push():
+        while True:
+            await observer_event.wait()
+            for ws in _websockets:
+                await ws.send_str(dispatcher_status_msg())
+                for studio in dispatcher.studios:
+                    await ws.send_str(led_status_msg(studio))
+
+            observer_event.clear()
+
+    def dispatcher_status_msg():
+        return json.dumps({'kind': 'dispatcher.status', 'payload': dispatcher.status})
+
+    def led_status_msg(studio: Studio):
+        return json.dumps({'kind': 'studio.led.status', 'payload': {'studio': studio.name, 'status': studio.led_status}})
+
     app.add_routes(routes)
 
-    runner = web.AppRunner(app)
+    runner = web.AppRunner(app, handle_signals=False)
     await runner.setup()
     site = web.TCPSite(runner, '192.168.0.133', 8080)
     await site.start()
+    dispatcher.machine_observers.add(observer)
+    observer_push_task = bermudafunk.base.loop.create_task(observer_push())
     await bermudafunk.base.cleanup_event.wait()
+    observer_push_task.cancel()
+    await close_remaining_websockets()
     await runner.cleanup()

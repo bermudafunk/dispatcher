@@ -1,11 +1,82 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Title</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Studio Controller</title>
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+    <link rel="stylesheet" href="app.css">
 </head>
 <body>
-<img src="/api/v1/partial_state_machine" style="width: 100vw;">
-<!--<img src="/api/v1/full_state_machine" style="width: 100vw;">-->
+
+<div class="container">
+    <div class="row">
+        <div class="col-12 col-md-6">
+            <h2>Status Information</h2>
+            <table class="table table-hover table-bordered">
+                <colgroup>
+                    <col style="width: 30%">
+                    <col style="width: 70%">
+                </colgroup>
+                <thead>
+                <tr>
+                    <th scope="col">Type</th>
+                    <th scope="col">Value</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <th scope="row">On Air Studio</th>
+                    <td id="status_on_air_studio">foobar</td>
+                </tr>
+                <tr>
+                    <th scope="row">State</th>
+                    <td id="status_state">foobar</td>
+                </tr>
+                <tr>
+                    <th scope="row">X</th>
+                    <td id="status_x">foobar</td>
+                </tr>
+                <tr>
+                    <th scope="row">Y</th>
+                    <td id="status_y">foobar</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="col-12 col-md-6">
+            <div class="row">
+                <div class="col">
+                    <form>
+                        <div class="form-group">
+                            <label for="studio_selector">Select Studio</label>
+                            <select class="form-control custom-select" id="studio_selector">
+                                <option selected></option>
+                                <option value="af_1">af_1</option>
+                                <option value="af_2">af_2</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="row studio">
+                <div class="col-10">
+                    <button type="button" class="btn btn-lg btn-block btn-success studio-button" data-kind="takeover">Übernahme</button>
+                    <button type="button" class="btn btn-lg btn-block btn-warning studio-button" data-kind="release">Freigabe</button>
+                    <button type="button" class="btn btn-lg btn-block btn-danger studio-button" data-kind="immediate">Sofort</button>
+                </div>
+                <div class="col">
+                    <div id="green_led" class="led green" data-state="off"></div>
+                    <div id="yellow_led" class="led yellow" data-state="off"></div>
+                    <div id="red_led" class="led red" data-state="off"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="js/jquery-3.3.1.min.js"></script>
+<script src="js/bootstrap.bundle.min.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

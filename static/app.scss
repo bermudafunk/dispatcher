@@ -1,0 +1,70 @@
+body {
+    padding: 1rem 0;
+}
+
+$led-color-map: (
+    green: (
+        off: #dfd,
+        on: #0b0,
+    ),
+    yellow: (
+        off:#ffa,
+        on: #fc0,
+    ),
+    red: (
+        off:#fee,
+        on: #f00,
+    )
+);
+
+$led-size: 2.5rem;
+
+$smooth-factor: 10;
+
+$blink-default-freq: 2;
+
+.led {
+    width: $led-size;
+    height: $led-size;
+    border: 2px black solid;
+    margin: 1rem auto;
+}
+
+@each $led-color in map-keys($led-color-map) {
+    $color-settings: map-get($led-color-map, $led-color);
+    $off-color: map-get($color-settings, off);
+    $on-color: map-get($color-settings, on);
+
+    @keyframes blink-#{$led-color} {
+        0% {
+            background-color: $off-color;
+        }
+        #{50%-$smooth-factor} {
+            background-color: $off-color;
+        }
+        #{50%+$smooth-factor} {
+            background-color: $on-color;
+        }
+        100% {
+            background-color: $on-color;
+        }
+    }
+
+    .led {
+        &.#{$led-color} {
+            &[data-state='off'] {
+                background-color: $off-color;
+            }
+            &[data-state='on'] {
+                background-color: $on-color;
+            }
+            &[data-state='blink'] {
+                animation-name: blink-#{$led-color};
+                animation-duration: #{(1/$blink-default-freq)}s;
+                animation-iteration-count: infinite;
+                animation-direction: alternate;
+                animation-timing-function: linear;
+            }
+        }
+    }
+}
