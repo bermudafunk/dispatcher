@@ -112,3 +112,17 @@ let change_graph_url = function (new_url) {
 graph_buttons.click(function (event) {
     change_graph_url(event.target.dataset.img);
 });
+
+$.get(
+    '/api/v1/studios',
+    function (data) {
+        const studio_selector = $('#studio_selector');
+        studio_selector.empty();
+        studio_selector.append($('<option></option>'));
+        data.forEach(function (studio) {
+            studio_selector.append(
+                $('<option value="' + studio + '">' + studio + '</option>')
+            );
+        });
+    }
+);
