@@ -71,7 +71,7 @@ class Dispatcher:
             Dispatcher._y = property(_y_get, _y_set)
             Dispatcher._on_air_selector_value = property(_on_air_selector_value_get, _on_air_selector_value_set)
 
-        self.immediate_state_time = 60  # seconds
+        self.immediate_state_time = 5 * 60  # seconds
         self.immediate_release_time = 30  # seconds
 
         self._symnet_controller = symnet_controller
@@ -359,7 +359,10 @@ class Dispatcher:
                 duration_to_next_hour = next_hour_timestamp - time.time()
 
             logger.info('hourly event %s', time.strftime('%Y-%m-%dT%H:%M:%S%z'))
-            self._machine.next_hour()
+            try:
+                self._machine.next_hour()
+            except MachineError as e:
+                logger.critical(e)
 
             self._assure_led_status()
         finally:
@@ -382,7 +385,10 @@ class Dispatcher:
 
         try:
             await asyncio.sleep(self.immediate_state_time)
-            self._machine.immediate_state_timeout()
+            try:
+                self._machine.immediate_state_timeout()
+            except MachineError as e:
+                logger.critical(e)
         finally:
             self._immediate_state_timer = None
 
@@ -403,7 +409,10 @@ class Dispatcher:
     async def __immediate_release_timer(self):
         try:
             await asyncio.sleep(self.immediate_release_time)
-            self._machine.immediate_release_timeout()
+            try:
+                self._machine.immediate_release_timeout()
+            except MachineError as e:
+                logger.critical(e)
         finally:
             self._immediate_release_timer = None
 
