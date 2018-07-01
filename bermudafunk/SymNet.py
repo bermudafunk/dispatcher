@@ -235,6 +235,7 @@ class SymNetDevice:
             cs = await self._state_queue.get()  # type: SymNetRawControllerState
             logger.debug("received some pushed data - handover to the controller object")
             if cs.controller_number in self.controllers:
+                # noinspection PyProtectedMember
                 self.controllers[cs.controller_number]._set_raw_value(cs.controller_value)
 
     def define_controller(self, controller_number: int) -> SymNetController:
