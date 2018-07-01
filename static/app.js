@@ -82,3 +82,33 @@ connection.onmessage = function (e) {
             console.log(data);
     }
 };
+
+
+let graph_url = null;
+const graph_container = $('#graph_container');
+const graph_buttons = $('.graph-buttons');
+
+let change_graph_url = function (new_url) {
+    graph_url = new_url;
+    console.log(graph_url);
+    graph_container.empty();
+    if (graph_url != null) {
+        graph_container.append(
+            $('<img src="' + graph_url + '?' + Math.random() + '">')
+        );
+    }
+    graph_buttons.each(function (_, el) {
+        let $el = $(el);
+        if (el.dataset.img === graph_url) {
+            $el.addClass('btn-primary');
+            $el.removeClass('btn-secondary');
+        } else {
+            $el.removeClass('btn-primary');
+            $el.addClass('btn-secondary');
+        }
+    })
+};
+
+graph_buttons.click(function (event) {
+    change_graph_url(event.target.dataset.img);
+});

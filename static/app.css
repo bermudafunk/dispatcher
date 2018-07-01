@@ -67,4 +67,7 @@ body {
   animation-direction: alternate;
   animation-timing-function: linear; }
 
+#graph_container img {
+  width: 100%; }
+
 /*# sourceMappingURL=app.css.map */
