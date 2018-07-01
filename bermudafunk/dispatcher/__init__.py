@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import json
 import logging
 import random
 import time
@@ -22,6 +23,8 @@ if not audit_logger.hasHandlers():
     stdout_handler = logging.StreamHandler(stream=sys.stdout)
     audit_logger.addHandler(stdout_handler)
 
+_save_state = typing.NamedTuple('_save_state', [('x', str), ('y', str), ('state', str)])
+
 
 class Dispatcher:
     AUTOMAT = 'automat'
@@ -32,6 +35,8 @@ class Dispatcher:
                  studio_mapping: typing.List[DispatcherStudioDefinition],
                  audit_internal_state=False
                  ):
+
+        self.file_path = 'state.json'
 
         if audit_internal_state:
             def _x_get(_self):
@@ -112,7 +117,6 @@ class Dispatcher:
 
         self._machine = Machine(states=states,
                                 initial='automat_on_air',
-                                auto_transitions=False,
                                 ignore_invalid_triggers=True,
                                 send_event=True,
                                 before_state_change=[self._before_state_change],
@@ -262,6 +266,7 @@ class Dispatcher:
         self._stop_next_hour_timer()
         self._stop_immediate_state_timer()
         self._stop_immediate_release_timer()
+        self.save()
 
     async def _process_studio_button_events(self):
         while True:
@@ -430,6 +435,39 @@ class Dispatcher:
             'x': self._x.name if self._x else None,
             'y': self._y.name if self._y else None,
         }
+
+    def load(self):
+        try:
+            with open(self.file_path, 'r') as fp:
+                state = json.load(fp)
+                state = _save_state(**state)
+                logger.debug(state)
+
+            if state.x:
+                self._x = Studio.names[state.x]
+                if state.y:
+                    self._y = Studio.names[state.y]
+            self._machine.trigger('to_' + state.state)
+        except IOError as e:
+            if e.errno == 2:
+                logger.warning('Could load dispatcher state: %s', e)
+            else:
+                logger.critical('Could load dispatcher state: %s', e)
+        except json.JSONDecodeError:
+            logger.critical('Could load dispatcher state: %s', e)
+
+    def save(self):
+        state = _save_state(
+            x=self._x.name if self._x else None,
+            y=self._y.name if self._y else None,
+            state=self._machine.state
+        )
+        logger.debug(state)
+        try:
+            with open(self.file_path, 'w') as fp:
+                json.dump(state._asdict(), fp)
+        except Exception as e:
+            logger.error(e)
 
 
 def calc_next_hour_timestamp(minutes=0, seconds=0):

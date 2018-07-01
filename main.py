@@ -30,6 +30,7 @@ if __name__ == '__main__':
             bermudafunk.dispatcher.DispatcherStudioDefinition(studio=af_3, selector_value=4),
         ]
     )
+    dispatcher.load()
 
     bermudafunk.base.loop.create_task(web.run(dispatcher))
 
