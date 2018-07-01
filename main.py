@@ -1,16 +1,10 @@
 import bermudafunk.dispatcher
 from bermudafunk import base
 from bermudafunk.SymNet import SymNetDevice
-from bermudafunk.base import systemd
 from bermudafunk.dispatcher import web
 
 if __name__ == '__main__':
     base.logger.debug('Main Start')
-
-    try:
-        systemd.setup()
-    except RuntimeError:
-        pass
 
     device = SymNetDevice(local_address=(base.config.myIp, base.config.myPort),
                           remote_address=(base.config.remoteIp, base.config.remotePort))
