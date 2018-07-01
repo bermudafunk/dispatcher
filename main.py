@@ -16,7 +16,7 @@ if __name__ == '__main__':
         takeover_button_pin=35,
         release_button_pin=33,
         immediate_button_pin=37,
-        green_led=GPIO.Led(1),
+        green_led=GPIO.Led(7),
         yellow_led=GPIO.Led(11),
         red_led=GPIO.Led(29),
     )
