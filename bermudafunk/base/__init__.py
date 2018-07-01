@@ -38,7 +38,6 @@ def run_loop():
         if len(cleanup_tasks) > 0:
             loop.run_until_complete(asyncio.wait(cleanup_tasks))
         loop.stop()
-        loop.close()
         logger.warning("End of looping!")
 
 
