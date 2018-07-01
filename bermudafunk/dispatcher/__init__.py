@@ -1,19 +1,17 @@
 import asyncio
 import datetime
-import enum
 import logging
 import random
 import time
 import typing
 import weakref
-from collections import namedtuple
 
 from transitions import EventData, MachineError
-from transitions.extensions import LockedGraphMachine as Machine
-from transitions.extensions.diagrams import Graph
 
 import bermudafunk.SymNet
-from bermudafunk import GPIO, base
+from bermudafunk import base
+from bermudafunk.dispatcher.data_types import Studio, StudioLedStatus, LedStatus, ButtonEvent, Button, DispatcherStudioDefinition
+from bermudafunk.dispatcher.transitions import LedAwareMachine as Machine, LedAwareState, LedStateTarget, States
 
 logger = logging.getLogger(__name__)
 
@@ -23,172 +21,6 @@ if not audit_logger.hasHandlers():
 
     stdout_handler = logging.StreamHandler(stream=sys.stdout)
     audit_logger.addHandler(stdout_handler)
-
-Graph.style_attributes['node']['default']['shape'] = 'octagon'
-Graph.style_attributes['node']['active']['shape'] = 'doubleoctagon'
-
-
-@enum.unique
-class Button(enum.Enum):
-    takeover = 'takeover'
-    release = 'release'
-    immediate = 'immediate'
-
-
-DispatcherStudioDefinition = namedtuple('DispatcherStudioDefinition', ['studio', 'selector_value'])
-
-
-class Studio:
-    names = {}  # type: typing.Dict[str, Studio]
-
-    def __init__(self,
-                 name: str,
-                 takeover_button_pin: int = None,
-                 release_button_pin: int = None,
-                 immediate_button_pin: int = None,
-                 green_led: GPIO.Led = None,
-                 yellow_led: GPIO.Led = None,
-                 red_led: GPIO.Led = None
-                 ):
-        self._name = name
-        if name in Studio.names.keys():
-            raise ValueError('name already used %s' % name)
-        Studio.names[name] = self
-
-        self._takeover_button_pin = None
-        self._release_button_pin = None
-        self._immediate_button_pin = None
-
-        self.takeover_button_pin = takeover_button_pin
-        self.release_button_pin = release_button_pin
-        self.immediate_button_pin = immediate_button_pin
-
-        self._green_led = green_led if green_led else GPIO.DummyLed()
-        self._yellow_led = yellow_led if yellow_led else GPIO.DummyLed()
-        self._red_led = red_led if red_led else GPIO.DummyLed()
-
-        self.dispatcher_button_event_queue = None  # type: typing.Optional[asyncio.Queue]
-
-    def __del__(self):
-        self.takeover_button_pin = None
-        self.release_button_pin = None
-        self.immediate_button_pin = None
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @property
-    def takeover_button_pin(self) -> int:
-        return self._takeover_button_pin
-
-    @takeover_button_pin.setter
-    def takeover_button_pin(self, new_pin: int):
-        if new_pin != self._takeover_button_pin:
-            return
-        if self._takeover_button_pin is not None:
-            GPIO.remove_button(self._takeover_button_pin)
-
-        self._takeover_button_pin = new_pin
-
-        if new_pin is not None:
-            GPIO.register_button(new_pin, coroutine=self._gpio_button_coroutine)
-
-    @property
-    def release_button_pin(self) -> int:
-        return self._release_button_pin
-
-    @release_button_pin.setter
-    def release_button_pin(self, new_pin: int):
-        if new_pin != self._release_button_pin:
-            return
-        if self._release_button_pin is not None:
-            GPIO.remove_button(self._release_button_pin)
-
-        self._release_button_pin = new_pin
-
-        if new_pin is not None:
-            GPIO.register_button(new_pin, coroutine=self._gpio_button_coroutine)
-
-    @property
-    def immediate_button_pin(self) -> int:
-        return self._immediate_button_pin
-
-    @immediate_button_pin.setter
-    def immediate_button_pin(self, new_pin: int):
-        if new_pin != self._immediate_button_pin:
-            return
-        if self._immediate_button_pin is not None:
-            GPIO.remove_button(self._immediate_button_pin)
-
-        self._immediate_button_pin = new_pin
-
-        if new_pin is not None:
-            GPIO.register_button(new_pin, coroutine=self._gpio_button_coroutine)
-
-    @property
-    def green_led(self) -> GPIO.DummyLed:
-        return self._green_led
-
-    @property
-    def yellow_led(self) -> GPIO.DummyLed:
-        return self._yellow_led
-
-    @property
-    def red_led(self) -> GPIO.DummyLed:
-        return self._red_led
-
-    @property
-    def led_status(self) -> typing.Dict[str, typing.Dict[str, typing.Union[str, int]]]:
-        return {
-            'green':
-                {
-                    'state': self.green_led.state.name,
-                    'blink_freq': self.green_led.blink_freq
-                },
-            'yellow':
-                {
-                    'state': self.yellow_led.state.name,
-                    'blink_freq': self.yellow_led.blink_freq
-                },
-            'red':
-                {
-                    'state': self.red_led.state.name,
-                    'blink_freq': self.red_led.blink_freq
-                },
-        }
-
-    async def _gpio_button_coroutine(self, pin):
-        event = None
-        if pin == self._takeover_button_pin:
-            event = ButtonEvent(self, Button.takeover)
-        elif pin == self._release_button_pin:
-            event = ButtonEvent(self, Button.release)
-        elif pin == self._immediate_button_pin:
-            event = ButtonEvent(self, Button.immediate)
-
-        if event and self.dispatcher_button_event_queue:
-            await self.dispatcher_button_event_queue.put(event)
-
-    def __repr__(self):
-        return '<Studio: name=%s>' % self.name
-
-
-ButtonEvent = typing.NamedTuple('ButtonEvent', [('studio', Studio), ('button', Button)])
-
-
-@enum.unique
-class States(enum.Enum):
-    AUTOMAT_ON_AIR = 'automat_on_air'
-    AUTOMAT_ON_AIR_IMMEDIATE_STATE_X = 'automat_on_air_immediate_state_X'
-    FROM_AUTOMAT_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR = 'from_automat_change_to_studio_X_on_next_hour'
-    STUDIO_X_ON_AIR = 'studio_X_on_air'
-    FROM_STUDIO_X_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR = 'from_studio_X_change_to_automat_on_next_hour'
-    STUDIO_X_ON_AIR_IMMEDIATE_STATE = 'studio_X_on_air_immediate_state'
-    STUDIO_X_ON_AIR_IMMEDIATE_RELEASE = 'studio_X_on_air_immediate_release'
-    FROM_STUDIO_X_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR = 'from_studio_X_change_to_studio_Y_on_next_hour'
-    STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST = 'studio_X_on_air_studio_Y_takeover_request'
-    NOOP = 'noop'
 
 
 class Dispatcher:
@@ -239,7 +71,7 @@ class Dispatcher:
             Dispatcher._y = property(_y_get, _y_set)
             Dispatcher._on_air_selector_value = property(_on_air_selector_value_get, _on_air_selector_value_set)
 
-        self.immediate_state_time = 5 * 60  # seconds
+        self.immediate_state_time = 60  # seconds
         self.immediate_release_time = 30  # seconds
 
         self._symnet_controller = symnet_controller
@@ -287,7 +119,8 @@ class Dispatcher:
                                 after_state_change=[self._after_state_change],
                                 finalize_event=[self._audit_state, self._assure_led_status, self._notify_machine_observers]
                                 )
-        transitions = [
+
+        dispatcher_transitions = [
             {'trigger': 'takeover_X', 'source': States.AUTOMAT_ON_AIR, 'dest': States.FROM_AUTOMAT_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR},
             {'trigger': 'immediate_X', 'source': States.AUTOMAT_ON_AIR, 'dest': States.AUTOMAT_ON_AIR_IMMEDIATE_STATE_X},
 
@@ -326,7 +159,8 @@ class Dispatcher:
             {'trigger': 'release_Y', 'source': States.STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST, 'dest': States.STUDIO_X_ON_AIR},
             {'trigger': 'release_X', 'source': States.STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST, 'dest': States.FROM_STUDIO_X_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR},
         ]
-        for transition in transitions:
+
+        for transition in dispatcher_transitions:
             for name, value in transition.items():
                 if isinstance(value, States):
                     transition[name] = value.value
@@ -459,42 +293,16 @@ class Dispatcher:
             self._assure_led_status()
 
     def _assure_led_status(self, _: EventData = None):
-        # FIXME: This seems to be really in complete
-        state = States(self._machine.state)
+        logger.debug('assure led status')
+        new_led_state = self._machine.get_state(self._machine.state).led_state_target  # type: LedStateTarget
         for studio in self._studios:
-            if self._x == studio:
-                # green led
-                logger.debug(state)
-                if state in [States.STUDIO_X_ON_AIR, States.STUDIO_X_ON_AIR_IMMEDIATE_STATE, States.STUDIO_X_ON_AIR_IMMEDIATE_RELEASE]:
-                    studio.green_led.state = GPIO.LedState.ON
-                elif state is States.FROM_AUTOMAT_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR:
-                    studio.green_led.state = GPIO.LedState.BLINK
-                else:
-                    studio.green_led.state = GPIO.LedState.OFF
-
-                # yellow led
-                if state in [States.STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST, States.STUDIO_X_ON_AIR_IMMEDIATE_RELEASE]:
-                    studio.yellow_led.state = GPIO.LedState.BLINK
-                else:
-                    studio.yellow_led.state = GPIO.LedState.OFF
-
-                # red led
-                if state is States.AUTOMAT_ON_AIR_IMMEDIATE_STATE_X or state is States.STUDIO_X_ON_AIR_IMMEDIATE_STATE:
-                    studio.red_led.state = GPIO.LedState.ON
-                elif state is state.STUDIO_X_ON_AIR_IMMEDIATE_RELEASE:
-                    studio.red_led.state = GPIO.LedState.BLINK
-                else:
-                    studio.red_led.state = GPIO.LedState.OFF
-            elif self._y == studio:
-                # FIXME: not useful right now
-                studio.green_led.state = GPIO.LedState.OFF
-                studio.yellow_led.state = GPIO.LedState.OFF
-                studio.red_led.state = GPIO.LedState.OFF
+            if studio == self._x:
+                logger.debug(new_led_state.x)
+                studio.led_status_typed = new_led_state.x
+            elif studio == self._y:
+                studio.led_status_typed = new_led_state.y
             else:
-                # TODO: Is this useful?
-                studio.green_led.state = GPIO.LedState.OFF
-                studio.yellow_led.state = GPIO.LedState.OFF
-                studio.red_led.state = GPIO.LedState.OFF
+                studio.led_status_typed = new_led_state.other
 
     def _audit_state(self, _: EventData = None):
         state = self._machine.state
