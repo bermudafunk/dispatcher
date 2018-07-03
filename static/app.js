@@ -11,7 +11,12 @@ const leds = {
     red: document.getElementById('red_led')
 };
 
-const status_ws_url = 'ws://' + location.host + '/api/v1/ws';
+let proto = 'ws://';
+if (location.protocol === 'https:') {
+    proto = 'wss://';
+}
+const status_ws_url = proto + location.host + '/api/v1/ws';
+
 
 let selected_studio = '';
 
@@ -132,4 +137,5 @@ function connection_start() {
         }
     };
 }
+
 connection_start();
