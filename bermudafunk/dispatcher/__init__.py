@@ -235,12 +235,12 @@ class Dispatcher:
             elif 'Y' in event_name:
                 self._y = button_event.studio
 
-        source_state = event.transition.source
-        if 'next_hour' in source_state:
+        destination_state = event.transition.dest
+        if 'next_hour' not in destination_state:
             self._stop_next_hour_timer()
-        elif 'immediate_state' in source_state:
+        elif 'immediate_state' not in destination_state:
             self._stop_immediate_state_timer()
-        elif 'immediate_release' in source_state:
+        elif 'immediate_release' not in destination_state:
             self._stop_immediate_release_timer()
 
     def _after_state_change(self, event: EventData):
@@ -453,7 +453,7 @@ class Dispatcher:
                 logger.warning('Could load dispatcher state: %s', e)
             else:
                 logger.critical('Could load dispatcher state: %s', e)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
             logger.critical('Could load dispatcher state: %s', e)
 
     def save(self):
