@@ -113,6 +113,7 @@ async def run(dispatcher: Dispatcher):
         return ws
 
     async def close_remaining_websockets():
+        logger.debug('closing remaining websockets')
         for ws in set(_websockets):
             await ws.close(code=aiohttp.WSCloseCode.GOING_AWAY, message='Server shutdown')
 
@@ -146,4 +147,6 @@ async def run(dispatcher: Dispatcher):
     await bermudafunk.base.cleanup_event.wait()
     observer_push_task.cancel()
     await close_remaining_websockets()
+    logger.debug('closed remaining websockets')
     await runner.cleanup()
+    logger.debug('runner cleanup ran')
