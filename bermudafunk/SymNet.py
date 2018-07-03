@@ -135,7 +135,7 @@ class SymNetController:
         if old_value != value:
             logger.debug("value has changed - notify observers")
             for clb in self.observer:
-                asyncio.ensure_future(clb(self, old_value=old_value, new_value=value))
+                base.loop.create_task(clb(self, old_value=old_value, new_value=value))
 
     def _assure_current_state(self):
         logger.debug("assure current controller %d state to set on the symnet device", self.controller_number)

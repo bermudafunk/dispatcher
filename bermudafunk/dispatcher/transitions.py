@@ -70,7 +70,7 @@ class States(enum.Enum):
             red=LedStatuses.OFF.value,
         )
     ))
-    FROM_AUTOMAT_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR = LedAwareState('from_automat_change_to_studio_X_on_next_hour', LedStateTarget(
+    FROM_AUTOMAT_ON_AIR_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR = LedAwareState('from_automat_on_air_change_to_studio_X_on_next_hour', LedStateTarget(
         x=StudioLedStatus(
             green=LedStatuses.BLINK.value,
             yellow=LedStatuses.OFF.value,
@@ -104,7 +104,7 @@ class States(enum.Enum):
             red=LedStatuses.OFF.value,
         )
     ))
-    FROM_STUDIO_X_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR = LedAwareState('from_studio_X_change_to_automat_on_next_hour', LedStateTarget(
+    FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR = LedAwareState('from_studio_X_on_air_change_to_automat_on_next_hour', LedStateTarget(
         x=StudioLedStatus(
             green=LedStatuses.ON.value,
             yellow=LedStatuses.BLINK.value,
@@ -155,7 +155,7 @@ class States(enum.Enum):
             red=LedStatuses.BLINK.value,
         )
     ))
-    FROM_STUDIO_X_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR = LedAwareState('from_studio_X_change_to_studio_Y_on_next_hour', LedStateTarget(
+    FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR = LedAwareState('from_studio_X_on_air_change_to_studio_Y_on_next_hour', LedStateTarget(
         x=StudioLedStatus(
             green=LedStatuses.ON.value,
             yellow=LedStatuses.ON.value,

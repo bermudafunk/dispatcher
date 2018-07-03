@@ -41,6 +41,7 @@ if __name__ == '__main__':
         ]
     )
     dispatcher.load()
+    dispatcher.start()
 
     bermudafunk.base.loop.create_task(web.run(dispatcher))
 

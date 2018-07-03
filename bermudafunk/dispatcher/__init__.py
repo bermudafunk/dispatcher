@@ -125,7 +125,7 @@ class Dispatcher:
                                 )
 
         dispatcher_transitions = [
-            {'trigger': 'takeover_X', 'source': States.AUTOMAT_ON_AIR, 'dest': States.FROM_AUTOMAT_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR},
+            {'trigger': 'takeover_X', 'source': States.AUTOMAT_ON_AIR, 'dest': States.FROM_AUTOMAT_ON_AIR_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR},
             {'trigger': 'immediate_X', 'source': States.AUTOMAT_ON_AIR, 'dest': States.AUTOMAT_ON_AIR_IMMEDIATE_STATE_X},
 
             {'trigger': 'takeover_X', 'source': States.AUTOMAT_ON_AIR_IMMEDIATE_STATE_X, 'dest': States.STUDIO_X_ON_AIR},
@@ -133,18 +133,18 @@ class Dispatcher:
             {'trigger': 'immediate_X', 'source': States.AUTOMAT_ON_AIR_IMMEDIATE_STATE_X, 'dest': States.AUTOMAT_ON_AIR},
             {'trigger': 'immediate_state_timeout', 'source': States.AUTOMAT_ON_AIR_IMMEDIATE_STATE_X, 'dest': States.AUTOMAT_ON_AIR},
 
-            {'trigger': 'takeover_X', 'source': States.FROM_AUTOMAT_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR, 'dest': States.AUTOMAT_ON_AIR},
-            {'trigger': 'release_X', 'source': States.FROM_AUTOMAT_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR, 'dest': States.AUTOMAT_ON_AIR},
-            {'trigger': 'next_hour', 'source': States.FROM_AUTOMAT_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR, 'dest': States.STUDIO_X_ON_AIR},
+            {'trigger': 'takeover_X', 'source': States.FROM_AUTOMAT_ON_AIR_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR, 'dest': States.AUTOMAT_ON_AIR},
+            {'trigger': 'release_X', 'source': States.FROM_AUTOMAT_ON_AIR_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR, 'dest': States.AUTOMAT_ON_AIR},
+            {'trigger': 'next_hour', 'source': States.FROM_AUTOMAT_ON_AIR_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR, 'dest': States.STUDIO_X_ON_AIR},
 
-            {'trigger': 'release_X', 'source': States.STUDIO_X_ON_AIR, 'dest': States.FROM_STUDIO_X_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR},
+            {'trigger': 'release_X', 'source': States.STUDIO_X_ON_AIR, 'dest': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR},
             {'trigger': 'immediate_X', 'source': States.STUDIO_X_ON_AIR, 'dest': States.STUDIO_X_ON_AIR_IMMEDIATE_STATE},
             {'trigger': 'takeover_Y', 'source': States.STUDIO_X_ON_AIR, 'dest': States.STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST},
 
-            {'trigger': 'takeover_X', 'source': States.FROM_STUDIO_X_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR, 'dest': States.STUDIO_X_ON_AIR},
-            {'trigger': 'release_X', 'source': States.FROM_STUDIO_X_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR, 'dest': States.STUDIO_X_ON_AIR},
-            {'trigger': 'takeover_Y', 'source': States.FROM_STUDIO_X_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR, 'dest': States.FROM_STUDIO_X_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR},
-            {'trigger': 'next_hour', 'source': States.FROM_STUDIO_X_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR, 'dest': States.AUTOMAT_ON_AIR},
+            {'trigger': 'takeover_X', 'source': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR, 'dest': States.STUDIO_X_ON_AIR},
+            {'trigger': 'release_X', 'source': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR, 'dest': States.STUDIO_X_ON_AIR},
+            {'trigger': 'takeover_Y', 'source': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR, 'dest': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR},
+            {'trigger': 'next_hour', 'source': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR, 'dest': States.AUTOMAT_ON_AIR},
 
             {'trigger': 'immediate_X', 'source': States.STUDIO_X_ON_AIR_IMMEDIATE_STATE, 'dest': States.STUDIO_X_ON_AIR},
             {'trigger': 'immediate_state_timeout', 'source': States.STUDIO_X_ON_AIR_IMMEDIATE_STATE, 'dest': States.STUDIO_X_ON_AIR},
@@ -155,13 +155,13 @@ class Dispatcher:
             {'trigger': 'takeover_Y', 'source': States.STUDIO_X_ON_AIR_IMMEDIATE_RELEASE, 'dest': States.STUDIO_X_ON_AIR, 'before': [self._prepare_change_to_y]},
             {'trigger': 'immediate_release_timeout', 'source': States.STUDIO_X_ON_AIR_IMMEDIATE_RELEASE, 'dest': States.AUTOMAT_ON_AIR},
 
-            {'trigger': 'takeover_Y', 'source': States.FROM_STUDIO_X_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR, 'dest': States.FROM_STUDIO_X_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR},
-            {'trigger': 'release_Y', 'source': States.FROM_STUDIO_X_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR, 'dest': States.FROM_STUDIO_X_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR},
-            {'trigger': 'next_hour', 'source': States.FROM_STUDIO_X_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR, 'dest': States.STUDIO_X_ON_AIR, 'before': [self._prepare_change_to_y]},
+            {'trigger': 'takeover_Y', 'source': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR, 'dest': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR},
+            {'trigger': 'release_Y', 'source': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR, 'dest': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR},
+            {'trigger': 'next_hour', 'source': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR, 'dest': States.STUDIO_X_ON_AIR, 'before': [self._prepare_change_to_y]},
 
             {'trigger': 'takeover_Y', 'source': States.STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST, 'dest': States.STUDIO_X_ON_AIR},
             {'trigger': 'release_Y', 'source': States.STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST, 'dest': States.STUDIO_X_ON_AIR},
-            {'trigger': 'release_X', 'source': States.STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST, 'dest': States.FROM_STUDIO_X_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR},
+            {'trigger': 'release_X', 'source': States.STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST, 'dest': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR},
         ]
 
         for transition in dispatcher_transitions:
@@ -179,13 +179,20 @@ class Dispatcher:
         self._machine.on_enter_automat_on_air(self._change_to_automat)
         self._machine.on_enter_studio_X_on_air(self._change_to_studio)
 
+        self._machine_observers = weakref.WeakSet()  # type: typing.Set[typing.Callable[Dispatcher]]
+
+        self._started = False
+
+    def start(self):
+        if self._started:
+            return
+        self._started = True
+
         # Start timers
         self._symnet_controller.add_observer(self._set_current_state)
         base.start_cleanup_aware_coroutine(self._assure_current_state_loop)
         base.start_cleanup_aware_coroutine(self._process_studio_button_events)
         base.cleanup_tasks.append(base.loop.create_task(self._cleanup()))
-
-        self._machine_observers = weakref.WeakSet()  # type: typing.Set[typing.Callable[Dispatcher]]
 
     def _notify_machine_observers(self, event: EventData):
         for observer in self._machine_observers:
@@ -212,12 +219,12 @@ class Dispatcher:
     def _prepare_change_to_y(self, _: EventData = None):
         self._x, self._y = self._y, None
 
-    def _change_to_automat(self, _: EventData):
+    def _change_to_automat(self, _: EventData = None):
         logger.debug('change to automat')
         self._on_air_selector_value = self._automat_selector_value
         base.loop.create_task(self._set_current_state())
 
-    def _change_to_studio(self, _: EventData):
+    def _change_to_studio(self, _: EventData = None):
         logger.debug('change to studio %s', self._x)
         self._on_air_selector_value = self._studios_to_selector_value[self._x]
         base.loop.create_task(self._set_current_state())
@@ -334,8 +341,8 @@ class Dispatcher:
             await asyncio.sleep(sleep_time)
 
     async def _set_current_state(self, *_, **__):
-        logger.info('Set the controller state now to %s!', self._automat_selector_value)
-        await self._symnet_controller.set_position(self._automat_selector_value)
+        logger.info('Set the controller state now to %s!', self._on_air_selector_value)
+        await self._symnet_controller.set_position(self._on_air_selector_value)
 
     def _start_next_hour_timer(self, _: EventData = None):
         if self._next_hour_timer and not self._next_hour_timer.done():
@@ -447,6 +454,15 @@ class Dispatcher:
                 self._x = Studio.names[state.x]
                 if state.y:
                     self._y = Studio.names[state.y]
+
+            # assure that the correct studio is on air
+            if 'automat_on_air' in state.state:
+                logger.debug('switch to automat')
+                self._change_to_automat()
+            elif 'studio_X_on_air' in state.state:
+                logger.debug('switch to studio')
+                self._change_to_studio()
+
             self._machine.trigger('to_' + state.state)
         except IOError as e:
             if e.errno == 2:
