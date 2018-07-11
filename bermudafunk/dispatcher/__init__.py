@@ -245,9 +245,9 @@ class Dispatcher:
         destination_state = event.transition.dest
         if 'next_hour' not in destination_state:
             self._stop_next_hour_timer()
-        elif 'immediate_state' not in destination_state:
+        if 'immediate_state' not in destination_state:
             self._stop_immediate_state_timer()
-        elif 'immediate_release' not in destination_state:
+        if 'immediate_release' not in destination_state:
             self._stop_immediate_release_timer()
 
     def _after_state_change(self, event: EventData):
