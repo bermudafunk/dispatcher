@@ -125,7 +125,7 @@ async def _cleanup():
     await base.cleanup_event.wait()
     logger.debug('cleanup cancel process_event')
     _initialized.cancel()
-    for led in _leds:
+    for _, led in _leds.items():
         led.state = LedState.OFF
     logger.debug('cleanup reset GPIO')
     GPIO.cleanup()
