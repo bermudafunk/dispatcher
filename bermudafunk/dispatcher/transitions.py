@@ -67,7 +67,7 @@ class States(enum.Enum):
         other=StudioLedStatus(
             green=LedStatuses.OFF.value,
             yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+            red=LedStatuses.BLINK.value,
         )
     ))
     FROM_AUTOMAT_ON_AIR_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR = LedAwareState('from_automat_on_air_change_to_studio_X_on_next_hour', LedStateTarget(
@@ -83,7 +83,7 @@ class States(enum.Enum):
         ),
         other=StudioLedStatus(
             green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
+            yellow=LedStatuses.BLINK.value,
             red=LedStatuses.OFF.value,
         )
     ))
@@ -100,14 +100,14 @@ class States(enum.Enum):
         ),
         other=StudioLedStatus(
             green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+            yellow=LedStatuses.ON.value,
+            red=LedStatuses.ON.value,
         )
     ))
     FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR = LedAwareState('from_studio_X_on_air_change_to_automat_on_next_hour', LedStateTarget(
         x=StudioLedStatus(
             green=LedStatuses.ON.value,
-            yellow=LedStatuses.BLINK.value,
+            yellow=LedStatuses.ON.value,
             red=LedStatuses.OFF.value,
         ),
         y=StudioLedStatus(
@@ -117,8 +117,8 @@ class States(enum.Enum):
         ),
         other=StudioLedStatus(
             green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+            yellow=LedStatuses.BLINK.value,
+            red=LedStatuses.ON.value,
         )
     ))
     STUDIO_X_ON_AIR_IMMEDIATE_STATE = LedAwareState('studio_X_on_air_immediate_state', LedStateTarget(
@@ -133,9 +133,9 @@ class States(enum.Enum):
             red=LedStatuses.OFF.value,
         ),
         other=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+            green=LedStatuses.BLINK.value,
+            yellow=LedStatuses.ON.value,
+            red=LedStatuses.ON.value,
         )
     ))
     STUDIO_X_ON_AIR_IMMEDIATE_RELEASE = LedAwareState('studio_X_on_air_immediate_release', LedStateTarget(
@@ -159,24 +159,24 @@ class States(enum.Enum):
         x=StudioLedStatus(
             green=LedStatuses.ON.value,
             yellow=LedStatuses.ON.value,
-            red=LedStatuses.OFF.value,
+            red=LedStatuses.ON.value,
         ),
         y=StudioLedStatus(
             green=LedStatuses.BLINK.value,
-            yellow=LedStatuses.OFF.value,
+            yellow=LedStatuses.ON.value,
             red=LedStatuses.OFF.value,
         ),
         other=StudioLedStatus(
             green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+            yellow=LedStatuses.ON.value,
+            red=LedStatuses.BLINK.value,
         )
     ))
     STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST = LedAwareState('studio_X_on_air_studio_Y_takeover_request', LedStateTarget(
         x=StudioLedStatus(
             green=LedStatuses.ON.value,
             yellow=LedStatuses.BLINK.value,
-            red=LedStatuses.OFF.value,
+            red=LedStatuses.BLINK.value,
         ),
         y=StudioLedStatus(
             green=LedStatuses.OFF.value,
@@ -184,9 +184,9 @@ class States(enum.Enum):
             red=LedStatuses.OFF.value,
         ),
         other=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+            green=LedStatuses.BLINK.value,
+            yellow=LedStatuses.ON.value,
+            red=LedStatuses.BLINK.value,
         )
     ))
     NOOP = LedAwareState('noop', LedStateTarget(
