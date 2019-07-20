@@ -23,21 +23,39 @@ if not audit_logger.hasHandlers():
     stdout_handler = logging.StreamHandler(stream=sys.stdout)
     audit_logger.addHandler(stdout_handler)
 
-_save_state = typing.NamedTuple('_save_state', [('x', str), ('y', str), ('state', str)])
-
 
 class Dispatcher:
+    """
+    This is the main state machine handler of bermudafunk
+
+    A state can be build up from at most two studios. The first studio is called X, the second one is called Y.
+    If the automat isn't on air, studio X is always the studio which could be currently on air.
+    Studio Y is only able to signal takeover requests.
+
+    There are three timers which could be used:
+    - the hourly timer which sends triggers the 'next_hour' event
+    - two timeout timers:
+        - the immediate state, triggers 'immediate_state_timeout'
+        - the immediate release, triggers 'immediate_release_timeout'
+    They are activated if the name of the timer is contained in the state name.
+    The timers are not reset if the name of the timer is in both src and dest state name.
+    """
     AUTOMAT = 'automat'
+
+    _save_state = typing.NamedTuple('_save_state', [('x', str), ('y', str), ('state', str)])
 
     def __init__(self,
                  symnet_controller: bermudafunk.SymNet.SymNetSelectorController,
                  automat_selector_value: int,
-                 studio_mapping: typing.List[DispatcherStudioDefinition],
-                 audit_internal_state=False
+                 studios: typing.List[DispatcherStudioDefinition],
+                 audit_internal_state=False,
+                 immediate_state_time=300,
+                 immediate_release_time=30
                  ):
 
         self.file_path = 'state.json'
 
+        # convert _x, _y and _on_air_selector_value to properties to audit their values
         if audit_internal_state:
             def _x_get(_self):
                 return _self.__x
@@ -76,54 +94,71 @@ class Dispatcher:
             Dispatcher._y = property(_y_get, _y_set)
             Dispatcher._on_air_selector_value = property(_on_air_selector_value_get, _on_air_selector_value_set)
 
-        self.immediate_state_time = 5 * 60  # seconds
-        self.immediate_release_time = 30  # seconds
+        self.immediate_state_time = int(immediate_state_time)  # in seconds
+        self.immediate_release_time = int(immediate_release_time)  # in seconds
 
         self._symnet_controller = symnet_controller
 
+        # task holders: The contained task should trigger the corresponding timeout action
         self._next_hour_timer = None  # type: typing.Optional[asyncio.Task]
         self._immediate_state_timer = None  # type: typing.Optional[asyncio.Task]
         self._immediate_release_timer = None  # type: typing.Optional[asyncio.Task]
 
+        # collecting button presses
         self._dispatcher_button_event_queue = asyncio.Queue(maxsize=1, loop=base.loop)
 
+        # the value of the automat source in the SymNetSelectorController
+        assert 1 <= automat_selector_value <= symnet_controller.position_count, "Automat selector value {} have to be in the range of valid selector values [1, {}]".format(
+            automat_selector_value, symnet_controller.position_count)
         self._automat_selector_value = automat_selector_value
 
+        # studios to switch between and automat
         self._studios = []  # type: typing.List[Studio]
+        # caching dictionaries to provide lookups
         self._studios_to_selector_value = {}  # type: typing.Dict[Studio, int]
         self._selector_value_to_studio = {}  # type: typing.Dict[int, Studio]
-        for studio_def in studio_mapping:
-            assert studio_def.selector_value not in self._selector_value_to_studio.keys()
-            self._studios.append(studio_def.studio)
-            self._studios_to_selector_value[studio_def.studio] = studio_def.selector_value
-            self._selector_value_to_studio[studio_def.selector_value] = studio_def.studio
-            studio_def.studio.dispatcher_button_event_queue = self._dispatcher_button_event_queue
+        for studio in studios:
+            assert studio.selector_value not in self._selector_value_to_studio.keys()
+            self._studios.append(studio.studio)
+            self._studios_to_selector_value[studio.studio] = studio.selector_value
+            self._selector_value_to_studio[studio.selector_value] = studio.studio
+            studio.studio.dispatcher_button_event_queue = self._dispatcher_button_event_queue
 
-        assert self._automat_selector_value not in self._selector_value_to_studio.keys()
-        assert Dispatcher.AUTOMAT not in self._studios_to_selector_value.keys()
+        assert self._automat_selector_value not in self._selector_value_to_studio.keys(), "Automat selector value als assigned to a studio"
+        assert Dispatcher.AUTOMAT not in self._studios_to_selector_value.keys(), "A studio has the magic studio name 'automat'"
 
-        # State machine values
-
+        # on air selector value hold the value we expect to be set in the SymNetSelectorController
         self.__on_air_selector_value = 0  # type: int
         self._on_air_selector_value = self._automat_selector_value
+
+        # == State machine initialization ==
+
+        # = State machine values =
+        # Studio X
         self.__x = None
-        self.__y = None
         self._x = None  # type: typing.Optional[Studio]
+        # Studio Y
+        self.__y = None
         self._y = None  # type: typing.Optional[Studio]
 
-        # State machine initialization
-
+        # Collect state objects from States Enum
         states = [state.value for _, state in States.__members__.items()]
 
-        self._machine = Machine(states=states,
-                                initial='automat_on_air',
-                                ignore_invalid_triggers=True,
-                                send_event=True,
-                                before_state_change=[self._before_state_change],
-                                after_state_change=[self._after_state_change],
-                                finalize_event=[self._audit_state, self._assure_led_status, self._notify_machine_observers]
-                                )
+        States.AUTOMAT_ON_AIR.value.add_callback('enter', self._change_to_automat)
+        States.STUDIO_X_ON_AIR.value.add_callback('enter', self._change_to_studio)
 
+        # Initialize the underlying transitions machine
+        self._machine = Machine(
+            states=states,
+            initial='automat_on_air',
+            ignore_invalid_triggers=True,
+            send_event=True,
+            before_state_change=[self._before_state_change],
+            after_state_change=[self._after_state_change],
+            finalize_event=[self._audit_state, self._assure_led_status, self._notify_machine_observers]
+        )
+
+        # TODO Move to transitions.py; requires special handling of the _prepare_change_to_y before methods
         dispatcher_transitions = [
             {'trigger': 'takeover_X', 'source': States.AUTOMAT_ON_AIR, 'dest': States.FROM_AUTOMAT_ON_AIR_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR},
             {'trigger': 'immediate_X', 'source': States.AUTOMAT_ON_AIR, 'dest': States.AUTOMAT_ON_AIR_IMMEDIATE_STATE_X},
@@ -152,38 +187,38 @@ class Dispatcher:
 
             {'trigger': 'takeover_X', 'source': States.STUDIO_X_ON_AIR_IMMEDIATE_RELEASE, 'dest': States.STUDIO_X_ON_AIR_IMMEDIATE_STATE},
             {'trigger': 'release_X', 'source': States.STUDIO_X_ON_AIR_IMMEDIATE_RELEASE, 'dest': States.STUDIO_X_ON_AIR_IMMEDIATE_STATE},
-            {'trigger': 'takeover_Y', 'source': States.STUDIO_X_ON_AIR_IMMEDIATE_RELEASE, 'dest': States.STUDIO_X_ON_AIR, 'before': [self._prepare_change_to_y]},
+            {'trigger': 'takeover_Y', 'source': States.STUDIO_X_ON_AIR_IMMEDIATE_RELEASE, 'dest': States.STUDIO_X_ON_AIR, 'before': [self._prepare_switch_to_y]},
             {'trigger': 'immediate_release_timeout', 'source': States.STUDIO_X_ON_AIR_IMMEDIATE_RELEASE, 'dest': States.AUTOMAT_ON_AIR},
 
             {'trigger': 'takeover_Y', 'source': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR, 'dest': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR},
             {'trigger': 'release_Y', 'source': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR, 'dest': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR},
-            {'trigger': 'next_hour', 'source': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR, 'dest': States.STUDIO_X_ON_AIR, 'before': [self._prepare_change_to_y]},
+            {'trigger': 'next_hour', 'source': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR, 'dest': States.STUDIO_X_ON_AIR, 'before': [self._prepare_switch_to_y]},
 
             {'trigger': 'takeover_Y', 'source': States.STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST, 'dest': States.STUDIO_X_ON_AIR},
             {'trigger': 'release_Y', 'source': States.STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST, 'dest': States.STUDIO_X_ON_AIR},
             {'trigger': 'release_X', 'source': States.STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST, 'dest': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR},
         ]
 
+        # Add the transitions between the states to the machine
         for transition in dispatcher_transitions:
             for name, value in transition.items():
                 if isinstance(value, States):
                     transition[name] = value.value
             self._machine.add_transition(**transition)
 
+        # Assure to ignore button presses which are not in any transition
         for _, button in Button.__members__.items():
             for kind in ['X', 'Y']:
                 trigger_name = button.name + '_' + kind
                 if trigger_name not in self._machine.events.keys():
                     self._machine.add_transition(trigger=trigger_name, source='noop', dest='noop')  # noops to complete all combinations of buttons presses
 
-        self._machine.on_enter_automat_on_air(self._change_to_automat)
-        self._machine.on_enter_studio_X_on_air(self._change_to_studio)
-
-        self._machine_observers = weakref.WeakSet()  # type: typing.Set[typing.Callable[Dispatcher]]
+        self._machine_observers = weakref.WeakSet()  # type: typing.Set[typing.Callable[[Dispatcher], typing.Any]]
 
         self._started = False
 
     def start(self):
+        """Start the long running dispatcher tasks"""
         if self._started:
             return
         self._started = True
@@ -203,7 +238,7 @@ class Dispatcher:
         return self._machine_observers
 
     @property
-    def on_air_studio_name(self):
+    def on_air_studio_name(self) -> str:
         if self._on_air_selector_value == self._automat_selector_value:
             return Dispatcher.AUTOMAT
         return self._selector_value_to_studio[self._on_air_selector_value].name
@@ -216,7 +251,7 @@ class Dispatcher:
     def studios(self) -> typing.List[Studio]:
         return self._studios
 
-    def _prepare_change_to_y(self, _: EventData = None):
+    def _prepare_switch_to_y(self, _: EventData = None):
         self._x, self._y = self._y, None
 
     def _change_to_automat(self, _: EventData = None):
@@ -237,11 +272,13 @@ class Dispatcher:
         if 'button_event' in event.kwargs.keys():
             button_event = event.kwargs.get('button_event')  # type: ButtonEvent
             event_name = event.event.name
+            # set the studio accordingly
             if 'X' in event_name:
                 self._x = button_event.studio
             elif 'Y' in event_name:
                 self._y = button_event.studio
 
+        # stop timers if the destination event doesn't require them
         destination_state = event.transition.dest
         if 'next_hour' not in destination_state:
             self._stop_next_hour_timer()
@@ -254,17 +291,18 @@ class Dispatcher:
         if event.transition.dest is None:  # internal transition, don't do anything right now
             return
 
+        # if the destination state doesn't require a studio, set it to None
         for tmp in ['X', 'Y']:
             if event.transition.dest and tmp not in event.transition.dest:
                 setattr(self, '_' + tmp.lower(), None)
 
-        # start timers
+        # start timers as needed
         destination_state = event.transition.dest
         if 'next_hour' in destination_state:
             self._start_next_hour_timer()
-        elif 'immediate_state' in destination_state:
+        if 'immediate_state' in destination_state:
             self._start_immediate_state_timer()
-        elif 'immediate_release' in destination_state:
+        if 'immediate_release' in destination_state:
             self._start_immediate_release_timer()
 
     async def _cleanup(self):
@@ -281,15 +319,19 @@ class Dispatcher:
             logger.debug('got new event %s, process now', event)
 
             append = None
-            if self._x is None:
+            if self._x is None:  # if no studio is active, it's always the X / first studio
                 append = '_X'
             else:
+                # a studio is active, to be the X event the button has to be pressed in the X studio
                 if self._x == event.studio:
                     append = '_X'
                 else:
+                    # else no second studio is currently in the active state
+                    # or the second studio is pressing a button
                     if self._y is None or self._y == event.studio:
                         append = '_Y'
 
+            # if the button press can be mapped to a studio trigger the machine
             if append:
                 trigger_name = event.button.name + append
                 logger.debug('state %s', {'state': self._machine.state, 'x': self._x, 'y': self._y})
@@ -305,6 +347,7 @@ class Dispatcher:
             self._assure_led_status()
 
     def _assure_led_status(self, _: EventData = None):
+        """Set the led state in studios"""
         logger.debug('assure led status')
         new_led_state = self._machine.get_state(self._machine.state).led_state_target  # type: LedStateTarget
         for studio in self._studios:
@@ -317,6 +360,7 @@ class Dispatcher:
                 studio.led_status_typed = new_led_state.other
 
     def _audit_state(self, _: EventData = None):
+        """Assure the required studios and only these are set"""
         state = self._machine.state
         if 'X' in state:
             if self._x is None:
@@ -333,6 +377,7 @@ class Dispatcher:
                 logger.critical('Y not in state and self._Y is not None')
 
     async def _assure_current_state_loop(self):
+        """In case something is going terrible wrong regarding the communication with the SymNetController, just the value again on a regular time frame"""
         while True:
             logger.debug('Assure that the controller have the desired state!')
             await self._set_current_state()
@@ -345,12 +390,14 @@ class Dispatcher:
         await self._symnet_controller.set_position(self._on_air_selector_value)
 
     def _start_next_hour_timer(self, _: EventData = None):
+        """Start the next hour timer if it isn't running already or has already completed"""
         if self._next_hour_timer and not self._next_hour_timer.done():
             return
 
         self._next_hour_timer = base.loop.create_task(self.__hour_timer())
 
     async def __hour_timer(self):
+        """Try to issue the trigger event as closely as possible to the full hour"""
         logger.debug('start hour timer')
 
         try:
@@ -372,7 +419,7 @@ class Dispatcher:
 
             logger.info('hourly event %s', time.strftime('%Y-%m-%dT%H:%M:%S%z'))
             try:
-                self._machine.next_hour()
+                self._machine.trigger('next_hour')
             except MachineError as e:
                 logger.critical(e)
 
@@ -398,7 +445,7 @@ class Dispatcher:
         try:
             await asyncio.sleep(self.immediate_state_time)
             try:
-                self._machine.immediate_state_timeout()
+                self._machine.trigger('immediate_state_timeout')
             except MachineError as e:
                 logger.critical(e)
         finally:
@@ -422,7 +469,7 @@ class Dispatcher:
         try:
             await asyncio.sleep(self.immediate_release_time)
             try:
-                self._machine.immediate_release_timeout()
+                self._machine.trigger('immediate_release_timeout')
             except MachineError as e:
                 logger.critical(e)
         finally:
@@ -447,7 +494,7 @@ class Dispatcher:
         try:
             with open(self.file_path, 'r') as fp:
                 state = json.load(fp)
-                state = _save_state(**state)
+                state = self._save_state(**state)
                 logger.debug(state)
 
             if state.x:
@@ -473,7 +520,7 @@ class Dispatcher:
             logger.critical('Could load dispatcher state: %s', e)
 
     def save(self):
-        state = _save_state(
+        state = self._save_state(
             x=self._x.name if self._x else None,
             y=self._y.name if self._y else None,
             state=self._machine.state

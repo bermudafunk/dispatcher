@@ -34,7 +34,7 @@ if __name__ == '__main__':
     dispatcher = bermudafunk.dispatcher.Dispatcher(
         symnet_controller=main_selector,
         automat_selector_value=1,
-        studio_mapping=[
+        studios=[
             bermudafunk.dispatcher.DispatcherStudioDefinition(studio=af_1, selector_value=2),
             bermudafunk.dispatcher.DispatcherStudioDefinition(studio=af_2, selector_value=3),
             bermudafunk.dispatcher.DispatcherStudioDefinition(studio=af_3, selector_value=4),
