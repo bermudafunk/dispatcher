@@ -486,9 +486,11 @@ class Dispatcher:
             logger.error(e)
 
 
-def calc_next_hour_timestamp(minutes=0, seconds=0):
-    next_datetime = datetime.datetime.now().replace(minute=minutes, second=seconds) + datetime.timedelta(hours=1)
+def calc_next_hour_timestamp(minutes=0, seconds=0, now=None):
+    if not isinstance(now, datetime.datetime):
+        now = datetime.datetime.now()
+    next_datetime = now.replace(minute=minutes, second=seconds) + datetime.timedelta(hours=1)
     next_timestamp = next_datetime.timestamp()
-    if next_timestamp - time.time() > 3600:
+    if next_timestamp - now.timestamp() > 3600:
         next_timestamp -= 3600
     return next_timestamp
