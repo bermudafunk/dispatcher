@@ -5,18 +5,13 @@ const dispatcher_status_elements = {
     y: $('#status_y'),
 };
 
-const leds = {
-    green: document.getElementById('green_led'),
-    yellow: document.getElementById('yellow_led'),
-    red: document.getElementById('red_led')
-};
-
 let proto = 'ws://';
 if (location.protocol === 'https:') {
     proto = 'wss://';
 }
 const status_ws_url = proto + location.host + '/api/v1/ws';
 
+let led_map = {};
 
 let selected_studio = '';
 
@@ -30,12 +25,13 @@ const update_selected_studio = function (new_value) {
     console.log(selected_studio);
 };
 
-const update_led_status = function (led_status) {
-    console.log(led_status);
-    for (let key in leds) {
-        console.log(key);
-        leds[key].dataset.state = led_status[key].state.toLowerCase();
-        leds[key].style.animationDuration = (1 / led_status[key].blink_freq) + 's';
+const update_led_status = function (payload) {
+    if (payload.studio in led_map) {
+        let led_entry = led_map[payload.studio];
+        for (let color in payload.status) {
+            led_entry[color][0].dataset.state = payload.status[color].state.toLowerCase();
+            led_entry[color][0].style.animationDuration = (1 / payload.status[color].blink_freq) + 's';
+        }
     }
 };
 
@@ -60,7 +56,7 @@ let change_graph_url = function (new_url) {
     graph_container.empty();
     if (graph_url != null) {
         graph_container.append(
-            $('<img src="' + graph_url + '?' + Math.random() + '">')
+            $('<img alt="graph" src="' + graph_url + '?' + Math.random() + '">')
         );
     }
     graph_buttons.each(function (_, el) {
@@ -85,10 +81,31 @@ $.get(
         const studio_selector = $('#studio_selector');
         studio_selector.empty();
         studio_selector.append($('<option></option>'));
+
+        const leds_table = $('#leds');
+        let row_template = $('tr', leds_table).clone();
+        leds_table.empty();
+
         data.forEach(function (studio) {
             studio_selector.append(
                 $('<option value="' + studio + '">' + studio + '</option>')
             );
+
+            let led_entry = {
+                'row': row_template.clone()
+            };
+            ['name', 'green', 'yellow', 'red'].forEach(function (key) {
+                led_entry[key] = $('#' + key, led_entry['row']);
+                led_entry[key].removeAttr('id');
+            });
+            led_entry['name'].text(studio);
+
+            leds_table.append(led_entry['row']);
+            led_map[studio] = led_entry;
+
+            if (connection !== null && connection.readyState === WebSocket.OPEN) {
+                connection.send(JSON.stringify({type: 'studio.led.status', studio: studio}));
+            }
         });
     }
 );
@@ -128,9 +145,7 @@ function connection_start() {
                 break;
             case 'studio.led.status':
                 const payload = data.payload;
-                if (payload.studio === selected_studio) {
-                    update_led_status(payload.status);
-                }
+                update_led_status(payload);
                 break;
             default:
                 console.log(data);

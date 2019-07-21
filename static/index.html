@@ -12,6 +12,48 @@
 <div class="container">
     <div class="row">
         <div class="col-12 col-md-6">
+            <h3>Info Panel</h3>
+            <table id="leds" class="table table-bordered">
+                <tr>
+                    <td id="name" style="vertical-align: middle;">Studio</td>
+                    <td>
+                        <div id="green" class="led green" data-state="off"></div>
+                    </td>
+                    <td>
+                        <div id="yellow" class="led yellow" data-state="off"></div>
+                    </td>
+                    <td>
+                        <div id="red" class="led red" data-state="off"></div>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div class="col-12 col-md-6">
+            <div class="row">
+                <div class="col">
+                    <form>
+                        <div class="form-group">
+                            <label for="studio_selector">Select Studio</label>
+                            <select class="form-control custom-select" id="studio_selector">
+                                <option selected></option>
+                                <option value="af_1">af_1</option>
+                                <option value="af_2">af_2</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="row studio">
+                <div class="col">
+                    <button type="button" class="btn btn-lg btn-block btn-success studio-button" data-kind="takeover">Übernahme</button>
+                    <button type="button" class="btn btn-lg btn-block btn-warning studio-button" data-kind="release">Freigabe</button>
+                    <button type="button" class="btn btn-lg btn-block btn-danger studio-button" data-kind="immediate">Sofort</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col">
             <h2>Status Information</h2>
             <table class="table table-hover table-bordered">
                 <colgroup>
@@ -43,34 +85,6 @@
                 </tr>
                 </tbody>
             </table>
-        </div>
-        <div class="col-12 col-md-6">
-            <div class="row">
-                <div class="col">
-                    <form>
-                        <div class="form-group">
-                            <label for="studio_selector">Select Studio</label>
-                            <select class="form-control custom-select" id="studio_selector">
-                                <option selected></option>
-                                <option value="af_1">af_1</option>
-                                <option value="af_2">af_2</option>
-                            </select>
-                        </div>
-                    </form>
-                </div>
-            </div>
-            <div class="row studio">
-                <div class="col-10">
-                    <button type="button" class="btn btn-lg btn-block btn-success studio-button" data-kind="takeover">Übernahme</button>
-                    <button type="button" class="btn btn-lg btn-block btn-warning studio-button" data-kind="release">Freigabe</button>
-                    <button type="button" class="btn btn-lg btn-block btn-danger studio-button" data-kind="immediate">Sofort</button>
-                </div>
-                <div class="col">
-                    <div id="green_led" class="led green" data-state="off"></div>
-                    <div id="yellow_led" class="led yellow" data-state="off"></div>
-                    <div id="red_led" class="led red" data-state="off"></div>
-                </div>
-            </div>
         </div>
     </div>
     <div class="row">

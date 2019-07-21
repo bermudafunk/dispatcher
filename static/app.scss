@@ -27,7 +27,7 @@ $blink-default-freq: 2;
     width: $led-size;
     height: $led-size;
     border: 2px black solid;
-    margin: 1rem auto;
+    margin: 0 auto;
 }
 
 @each $led-color in map-keys($led-color-map) {
@@ -55,9 +55,11 @@ $blink-default-freq: 2;
             &[data-state='off'] {
                 background-color: $off-color;
             }
+
             &[data-state='on'] {
                 background-color: $on-color;
             }
+
             &[data-state='blink'] {
                 animation-name: blink-#{$led-color};
                 animation-duration: #{(1/$blink-default-freq)}s;

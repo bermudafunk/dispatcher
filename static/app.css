@@ -5,7 +5,7 @@ body {
   width: 2.5rem;
   height: 2.5rem;
   border: 2px black solid;
-  margin: 1rem auto; }
+  margin: 0 auto; }
 
 @keyframes blink-green {
   0% {
