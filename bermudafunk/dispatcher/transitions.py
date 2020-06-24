@@ -3,12 +3,12 @@ import typing
 
 from transitions import State
 from transitions.extensions import LockedGraphMachine as Machine
-from transitions.extensions.diagrams import Graph
+from transitions.extensions.diagrams import GraphMachine
 
 from bermudafunk.dispatcher.data_types import StudioLedStatus, LedStatus, LedState
 
-Graph.style_attributes['node']['default']['shape'] = 'octagon'
-Graph.style_attributes['node']['active']['shape'] = 'doubleoctagon'
+GraphMachine.style_attributes['node']['default']['shape'] = 'octagon'
+GraphMachine.style_attributes['node']['active']['shape'] = 'doubleoctagon'
 
 LedStateTarget = typing.NamedTuple('LedStateTarget', [('x', StudioLedStatus), ('y', StudioLedStatus), ('other', StudioLedStatus)])
 
