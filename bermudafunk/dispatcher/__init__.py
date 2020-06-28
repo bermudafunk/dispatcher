@@ -144,13 +144,13 @@ class Dispatcher:
         # Collect state objects from States Enum
         states = [state.value for _, state in States.__members__.items()]
 
-        States.AUTOMAT_ON_AIR.value.add_callback('enter', self._change_to_automat)
-        States.STUDIO_X_ON_AIR.value.add_callback('enter', self._change_to_studio)
+        States.AUTOMAT_ON_AIR.add_callback('enter', self._change_to_automat)
+        States.STUDIO_X_ON_AIR.add_callback('enter', self._change_to_studio)
 
         # Initialize the underlying transitions machine
         self._machine = Machine(
-            states=states,
-            initial='automat_on_air',
+            states=States,
+            initial=States.AUTOMAT_ON_AIR,
             ignore_invalid_triggers=True,
             send_event=True,
             before_state_change=[self._before_state_change],
