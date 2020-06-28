@@ -1,15 +1,16 @@
 import bermudafunk.dispatcher
 from bermudafunk import base, GPIO
-from bermudafunk.SymNet import SymNetDevice
+from bermudafunk.SymNet import SymNetDevice, SymNetSelectorControllerDummy
 from bermudafunk.dispatcher import web
 
 if __name__ == '__main__':
     base.logger.debug('Main Start')
 
-    device = SymNetDevice(local_address=(base.config.myIp, base.config.myPort),
-                          remote_address=(base.config.remoteIp, base.config.remotePort))
-
-    main_selector = device.define_selector(1, 8)
+    # device = SymNetDevice(local_address=(base.config.myIp, base.config.myPort),
+    #                       remote_address=(base.config.remoteIp, base.config.remotePort))
+    #
+    # main_selector = device.define_selector(1, 8)
+    main_selector = SymNetSelectorControllerDummy(1, 8)
 
     af_1 = bermudafunk.dispatcher.Studio(
         name='AlteFeuerwache1',
