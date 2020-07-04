@@ -6,7 +6,6 @@ import typing
 import RPi.GPIO
 
 from . import common
-from .common import LampState
 
 logger = logging.getLogger(__name__)
 
@@ -96,11 +95,11 @@ class Lamp(common.BaseLamp, GPIO):
         self._blinker = None  # type: typing.Optional[common.Blinker]
 
     @property
-    def state(self) -> LampState:
+    def state(self) -> common.LampState:
         return self._state
 
     @state.setter
-    def state(self, new_state: LampState):
+    def state(self, new_state: common.LampState):
         if not isinstance(new_state, common.LampState):
             raise ValueError("This supports only values of {}".format(type(common.LampState)))
         with self._lock:
