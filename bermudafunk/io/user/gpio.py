@@ -56,16 +56,30 @@ class GPIO:
 
 
 class Button(common.BaseButton, GPIO):
+    DEBOUNCE_TIME = 200  # in ms
+
     def __init__(self, name: str, pin: int, pull_up_down=RPi.GPIO.PUD_DOWN):
         super().__init__(name)
         super().__init__(pin, direction=RPi.GPIO.IN, pull_up_down=pull_up_down)
 
         if pull_up_down is RPi.GPIO.PUD_DOWN:
-            RPi.GPIO.add_event_callback(pin, RPi.GPIO.RISING, callback=functools.partial(self.trigger_event, common.ButtonEvent.PRESSED))
-            RPi.GPIO.add_event_callback(pin, RPi.GPIO.FALLING, callback=functools.partial(self.trigger_event, common.ButtonEvent.RELEASED))
+            RPi.GPIO.add_event_detect(pin,
+                                      RPi.GPIO.RISING,
+                                      callback=functools.partial(self.trigger_event, common.ButtonEvent.PRESSED),
+                                      bouncetime=Button.DEBOUNCE_TIME)
+            RPi.GPIO.add_event_detect(pin,
+                                      RPi.GPIO.FALLING,
+                                      callback=functools.partial(self.trigger_event, common.ButtonEvent.RELEASED),
+                                      bouncetime=Button.DEBOUNCE_TIME)
         elif pull_up_down is RPi.GPIO.PUD_UP:
-            RPi.GPIO.add_event_callback(pin, RPi.GPIO.FALLING, callback=functools.partial(self.trigger_event, common.ButtonEvent.PRESSED))
-            RPi.GPIO.add_event_callback(pin, RPi.GPIO.RISING, callback=functools.partial(self.trigger_event, common.ButtonEvent.RELEASED))
+            RPi.GPIO.add_event_detect(pin,
+                                      RPi.GPIO.FALLING,
+                                      callback=functools.partial(self.trigger_event, common.ButtonEvent.PRESSED),
+                                      bouncetime=Button.DEBOUNCE_TIME)
+            RPi.GPIO.add_event_detect(pin,
+                                      RPi.GPIO.RISING,
+                                      callback=functools.partial(self.trigger_event, common.ButtonEvent.RELEASED),
+                                      bouncetime=Button.DEBOUNCE_TIME)
 
     def __del__(self):
         RPi.GPIO.remove_event_detect(self.pin)
