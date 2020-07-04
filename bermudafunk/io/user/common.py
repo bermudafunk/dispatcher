@@ -1,6 +1,9 @@
 import abc
 import collections.abc
 import enum
+import itertools
+import threading
+import time
 import typing
 import weakref
 
@@ -13,8 +16,10 @@ class ButtonEvent(enum.Enum):
 
 class BaseButton(abc.ABC):
     def __init__(self, name: str):
-        self.__trigger = weakref.WeakSet()  # type: weakref.WeakSet[typing.Callable]
+        self.__trigger = weakref.WeakSet()  # type: typing.Set[typing.Callable]
         self._name = name
+
+        self._lock = threading.Lock()
 
     @property
     def name(self) -> str:
@@ -35,8 +40,9 @@ class BaseButton(abc.ABC):
         self.__trigger.remove(handler)
 
     def trigger_event(self, event: ButtonEvent):
-        for trigger in self.__trigger:
-            trigger(self, event)
+        with self._lock:
+            for trigger in self.__trigger:
+                trigger(self, event)
 
 
 @enum.unique
@@ -44,9 +50,13 @@ class LampState(enum.Enum):
     def __new__(cls, frequency: float):
         value = len(cls.__members__) + 1
         obj = object.__new__(cls)
-        obj.frequency = frequency
+        obj._frequency = frequency
         obj._value_ = value
         return obj
+
+    @property
+    def frequency(self) -> float:
+        return self._frequency
 
     OFF = 0
     ON = 0
@@ -71,3 +81,37 @@ class BaseLamp(abc.ABC):
     @abc.abstractmethod
     def state(self, state: LampState):
         pass
+
+
+class Blinker(threading.Thread):
+    def __init__(self, output_caller: typing.List[typing.Callable[[], None]], frequency: float, name="Blinker Thread"):
+        super().__init__(name=name, daemon=False)
+        self._output_caller = output_caller
+
+        self._frequency = frequency
+        self._time_to_sleep = 1 / frequency
+        self._frequency_lock = threading.Lock()
+
+        self._stop_event = threading.Event()
+
+    @property
+    def frequency(self) -> float:
+        return self._frequency
+
+    @frequency.setter
+    def frequency(self, new_frequency: float):
+        if not isinstance(new_frequency, (float, int)):
+            raise ValueError("Frequency have to be a float or int")
+        with self._frequency_lock:
+            self._frequency = new_frequency
+            self._time_to_sleep = 1 / new_frequency
+
+    def run(self):
+        for caller in itertools.cycle(self._output_caller):
+            caller()
+            if self._stop_event.is_set():
+                break
+            time.sleep(self._time_to_sleep)
+
+    def stop(self):
+        self._stop_event.set()
