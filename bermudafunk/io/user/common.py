@@ -1,11 +1,15 @@
 import abc
+import asyncio
 import collections.abc
 import enum
+import inspect
 import itertools
 import threading
 import time
 import typing
 import weakref
+
+from ...base.asyncio import loop
 
 
 @enum.unique
@@ -18,8 +22,6 @@ class BaseButton(abc.ABC):
     def __init__(self, name: str):
         self.__trigger = weakref.WeakSet()  # type: typing.Set[typing.Callable]
         self._name = name
-
-        self._lock = threading.Lock()
 
     @property
     def name(self) -> str:
@@ -39,10 +41,12 @@ class BaseButton(abc.ABC):
             raise TypeError("The supplied handler isn't callable")
         self.__trigger.remove(handler)
 
-    def trigger_event(self, event: ButtonEvent):
-        with self._lock:
-            for trigger in self.__trigger:
-                trigger(self, event)
+    def trigger_event(self, event: ButtonEvent, *args, **kwargs):
+        for trigger in self.__trigger:
+            if inspect.iscoroutinefunction(trigger):
+                asyncio.run_coroutine_threadsafe(trigger(event), loop)
+            else:
+                trigger(event)
 
 
 @enum.unique
@@ -85,7 +89,7 @@ class BaseLamp(abc.ABC):
 
 class Blinker(threading.Thread):
     def __init__(self, output_caller: typing.List[typing.Callable[[], None]], frequency: float, name="Blinker Thread"):
-        super().__init__(name=name, daemon=False)
+        super().__init__(name=name, daemon=True)
         self._output_caller = output_caller
 
         self._frequency = frequency
