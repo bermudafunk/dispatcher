@@ -9,7 +9,7 @@ import time
 import typing
 import weakref
 
-from ...base.asyncio import loop
+from bermudafunk.base.asyncio import loop
 
 
 @enum.unique
