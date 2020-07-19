@@ -12,13 +12,7 @@ import weakref
 from bermudafunk.base.asyncio import loop
 
 
-@enum.unique
-class ButtonEvent(enum.Enum):
-    PRESSED = enum.auto()
-    RELEASED = enum.auto()
-
-
-class BaseButton(abc.ABC):
+class BaseInput(abc.ABC):
     def __init__(self, name: str):
         self.__trigger = weakref.WeakSet()  # type: typing.Set[typing.Callable]
         self._name = name
@@ -27,30 +21,30 @@ class BaseButton(abc.ABC):
     def name(self) -> str:
         return self._name
 
-    def add_handler(self, handler: typing.Callable[[ButtonEvent], None]):
+    def add_handler(self, handler: typing.Callable):
         if not isinstance(handler, collections.abc.Hashable):
             raise TypeError("The supplied handler isn't hashable")
         if not isinstance(handler, collections.abc.Callable):
             raise TypeError("The supplied handler isn't callable")
         self.__trigger.add(handler)
 
-    def remove_handler(self, handler: typing.Callable[[ButtonEvent], None]):
+    def remove_handler(self, handler: typing.Callable):
         if not isinstance(handler, collections.abc.Hashable):
             raise TypeError("The supplied handler isn't hashable")
         if not isinstance(handler, collections.abc.Callable):
             raise TypeError("The supplied handler isn't callable")
         self.__trigger.remove(handler)
 
-    def trigger_event(self, event: ButtonEvent, *args, **kwargs):
+    def trigger_event(self, *args, **kwargs):
         for trigger in self.__trigger:
             if inspect.iscoroutinefunction(trigger):
-                asyncio.run_coroutine_threadsafe(trigger(event), loop)
+                asyncio.run_coroutine_threadsafe(trigger(), loop)
             else:
-                trigger(event)
+                trigger()
 
 
 @enum.unique
-class LampState(enum.Enum):
+class OutputState(enum.Enum):
     def __new__(cls, frequency: float):
         value = len(cls.__members__) + 1
         obj = object.__new__(cls)
@@ -68,7 +62,7 @@ class LampState(enum.Enum):
     BLINK_FAST = 4
 
 
-class BaseLamp(abc.ABC):
+class BaseOutput(abc.ABC):
     def __init__(self, name: str):
         self._name = name
 
@@ -78,12 +72,12 @@ class BaseLamp(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def state(self) -> LampState:
+    def state(self) -> OutputState:
         pass
 
     @state.setter
     @abc.abstractmethod
-    def state(self, state: LampState):
+    def state(self, state: OutputState):
         pass
 
 

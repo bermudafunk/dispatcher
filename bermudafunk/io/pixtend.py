@@ -1,6 +1,23 @@
 import enum
+import functools
 import struct
+import threading
+import time
 import typing
+
+import spidev
+
+from .common import OutputState
+from .gpio import Output
+
+# Get a precise timer for our interval timing.
+# Try to get a timer that is guaranteed to only monotonically increase.
+if hasattr(time, "clock_gettime") and hasattr(time, "CLOCK_MONOTONIC_RAW"):
+    timer = functools.partial(time.clock_gettime, time.CLOCK_MONOTONIC_RAW)
+elif hasattr(time, "monotonic"):
+    timer = time.monotonic
+else:
+    timer = time.time
 
 
 def _calc_crc16(data):
@@ -79,8 +96,12 @@ class Pixtend:
     OUT_DATA = struct.Struct('<8B H B 4B B3H B3H B3H 64s')
     OUT_FORMAT = struct.Struct('<7s H 100s H')
 
-    def __init__(self):
-        self._communication_interval_ms = 30
+    def __init__(self, communication_interval: float = 0.03, autostart=True):
+        self._transfer_lock = threading.RLock()
+
+        if communication_interval < 0.03:
+            raise ValueError('The communication interval have to be at least 30 ms')
+        self._communication_interval = communication_interval
 
         self._model_out = ord('L')
         self._mode = 0
@@ -117,6 +138,27 @@ class Pixtend:
         self._humid = [-1] * 4
 
         self._retain_data_in = bytes()
+
+        self._mc_enable = Output('Pixtend microcontroller spi enable', 18)
+        self._mc_enable.state = OutputState.ON
+        self._mc_reset = Output('Pixtend microcontroller reset', 16)
+
+        self._spi = spidev.SpiDev()
+        self._spi.open(0, 1)
+        self._spi.max_speed_hz = 700000
+
+        self.__communication_thread = None  # type: typing.Optional[threading.Thread]
+        self.__communication_thread_terminate = False
+
+        if autostart:
+            self._start_communication_thread()
+
+    def __del__(self):
+        self._stop_communication_thread()
+        self._spi.close()
+        self._spi = None
+        self._mc_enable.state = OutputState.OFF
+        self._mc_reset.state = OutputState.OFF
 
     def _pack_output(self):
         header_data = self.OUT_HEADER.pack(
@@ -179,6 +221,51 @@ class Pixtend:
             self._retain_data_in
         ) = self.IN_DATA.unpack(data)
 
+    def _start_communication_thread(self):
+        if self.__communication_thread is not None:
+            raise RuntimeWarning('Communication thread is already running')
+
+        self.__communication_thread_terminate = False
+        self.__communication_thread = threading.Thread(
+            name='Pixtend communication thread',
+            target=self._spi_communicate,
+            daemon=False
+        )
+        self.__communication_thread.start()
+
+    def _stop_communication_thread(self):
+        if self.__communication_thread is None:
+            raise RuntimeWarning('Communication thread is not running anymore')
+
+        self.__communication_thread_terminate = True
+        self.__communication_thread.join()
+        self.__communication_thread = None
+
+    def _spi_communicate(self):
+        with self._transfer_lock:
+            data = self._pack_output()
+            resp = self._spi.xfer2(data)
+            self._unpack_input(resp)
+
+    def _spi_communication_loop(self):
+        next_com = timer()
+        while not self.__communication_thread_terminate:
+            self._spi_communicate()
+
+            next_com += self._communication_interval
+            now = timer()
+            if next_com < now:
+                # The next auto_mode already is in the past.
+                # We probably are not executing fast enough
+                # to hold the deadlines.
+                # But sleep at least one millisecond to give other threads
+                # a chance. Otherwise we might starve them.
+                next_com = now + 1e-3
+
+            # Calculate the duration to the next auto mode deadline
+            # and sleep until then.
+            time.sleep(next_com - now)
+
     safe = _bit_getter_setter('_uc_ctrl_1', 0)
     retain_copy = _bit_getter_setter('_uc_ctrl_1', 1)
     retain_enable = _bit_getter_setter('_uc_ctrl_1', 2)
@@ -223,7 +310,7 @@ class Pixtend:
         return self._digital_debounce[channel_duo]
 
     def digital_in_debounce_seconds(self, channel_duo: int) -> float:
-        return self.digital_in_debounce_cycles(channel_duo) * self._communication_interval_ms / 1000
+        return self.digital_in_debounce_cycles(channel_duo) * self._communication_interval
 
     def relay_out(self, channel: int, val: typing.Optional[bool] = None) -> bool:
         if not (0 <= channel <= 3):
@@ -300,7 +387,7 @@ class Pixtend:
         return self._digital_debounce[channel_duo]
 
     def gpio_in_debounce_seconds(self, channel_duo: int) -> float:
-        return self.gpio_in_debounce_cycles(channel_duo) * self._communication_interval_ms / 1000
+        return self.gpio_in_debounce_cycles(channel_duo) * self._communication_interval
 
     @property
     def retain_data_out(self) -> bytes:
