@@ -7,14 +7,13 @@ import itertools
 import threading
 import time
 import typing
-import weakref
 
 from bermudafunk.base.asyncio import loop
 
 
 class BaseButton(abc.ABC):
     def __init__(self, name: str):
-        self.__trigger = weakref.WeakSet()  # type: typing.Set[typing.Callable]
+        self.__trigger = set()  # type: typing.Set[typing.Callable]
         self._name = name
 
     @property
@@ -35,7 +34,7 @@ class BaseButton(abc.ABC):
             raise TypeError("The supplied handler isn't callable")
         self.__trigger.remove(handler)
 
-    def trigger_event(self, *args, **kwargs):
+    def _trigger_event(self, *args, **kwargs):
         for trigger in self.__trigger:
             if inspect.iscoroutinefunction(trigger):
                 asyncio.run_coroutine_threadsafe(trigger(), loop)

@@ -1,25 +1,31 @@
+import functools
 import logging
 import typing
 
 from . import common
-from .common import LampState, ButtonEvent
+from .common import LampState
 
 logger = logging.getLogger(__name__)
 
 
 class DummyButton(common.BaseButton):
-    def add_handler(self, handler: typing.Callable[[ButtonEvent], None]):
+    def add_handler(self, handler: typing.Callable):
         super().add_handler(handler)
         logger.info("Added handler {} to button {}".format(handler, self.name))
 
-    def remove_handler(self, handler: typing.Callable[[ButtonEvent], None]):
+    def remove_handler(self, handler: typing.Callable):
         super().remove_handler(handler)
         logger.info("Removed handler {} to button {}".format(handler, self.name))
 
 
 class DummyLamp(common.BaseLamp):
     def __init__(self, name: str):
-        super().__init__(name)
+        common.BaseLamp.__init__(
+            self,
+            name,
+            on_callable=functools.partial(logger.debug, 'Dummy Lamp ON'),
+            off_callable=functools.partial(logger.debug, 'Dummy Lamp OFF')
+        )
         self._state = common.LampState.OFF
 
     @property
