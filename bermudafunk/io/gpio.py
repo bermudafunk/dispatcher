@@ -1,7 +1,5 @@
 import functools
 import logging
-import threading
-import typing
 
 import RPi.GPIO
 
@@ -54,11 +52,11 @@ class GPIO:
         RPi.GPIO.cleanup(self._pin)
 
 
-class Input(common.BaseInput, GPIO):
+class GPIOButton(common.BaseButton, GPIO):
     DEBOUNCE_TIME = 200  # in ms
 
     def __init__(self, name: str, pin: int, pull_up_down=RPi.GPIO.PUD_UP, internal_pull=False):
-        common.BaseInput.__init__(self, name)
+        common.BaseButton.__init__(self, name)
         GPIO.__init__(self, pin, direction=RPi.GPIO.IN, pull_up_down=(pull_up_down if internal_pull else RPi.GPIO.PUD_OFF))
 
         if pull_up_down not in (RPi.GPIO.PUD_UP, RPi.GPIO.PUD_DOWN):
@@ -68,63 +66,28 @@ class Input(common.BaseInput, GPIO):
             RPi.GPIO.add_event_detect(pin,
                                       RPi.GPIO.RISING,
                                       callback=self.trigger_event,
-                                      bouncetime=Input.DEBOUNCE_TIME)
+                                      bouncetime=GPIOButton.DEBOUNCE_TIME)
         elif pull_up_down is RPi.GPIO.PUD_UP:
             RPi.GPIO.add_event_detect(pin,
                                       RPi.GPIO.FALLING,
                                       callback=self.trigger_event,
-                                      bouncetime=Input.DEBOUNCE_TIME)
+                                      bouncetime=GPIOButton.DEBOUNCE_TIME)
 
     def __del__(self):
         RPi.GPIO.remove_event_detect(self.pin)
         super().__del__()
 
 
-class Output(common.BaseOutput, GPIO):
+class GPIOLamp(common.BaseLamp, GPIO):
     def __init__(self, name: str, pin: int):
-        common.BaseOutput.__init__(self, name)
         GPIO.__init__(self, pin, direction=RPi.GPIO.OUT, initial=RPi.GPIO.LOW)
-
-        self._state = common.OutputState.OFF  # type: common.OutputState
-        self._lock = threading.Lock()
-        self._blinker = None  # type: typing.Optional[common.Blinker]
-
-    @property
-    def state(self) -> common.OutputState:
-        return self._state
-
-    @state.setter
-    def state(self, new_state: common.OutputState):
-        if not isinstance(new_state, common.OutputState):
-            raise ValueError("This supports only values of {}".format(type(common.OutputState)))
-        with self._lock:
-            if self._state is not new_state:
-                if new_state.frequency > 0:
-                    if self._blinker is None:
-                        self._blinker = common.Blinker(
-                            name="Blinker thread of GPIO lamp {}".format(self.name),
-                            frequency=new_state.frequency,
-                            output_caller=[
-                                functools.partial(RPi.GPIO.output, self.pin, RPi.GPIO.LOW),
-                                functools.partial(RPi.GPIO.output, self.pin, RPi.GPIO.HIGH),
-                            ]
-                        )
-                        self._blinker.start()
-                    else:
-                        self._blinker.frequency = new_state.frequency
-                else:
-                    if self._blinker is not None:
-                        self._blinker.stop()
-                        self._blinker = None
-                    if new_state is common.OutputState.OFF:
-                        RPi.GPIO.output(self.pin, RPi.GPIO.LOW)
-                    elif new_state is common.OutputState.ON:
-                        RPi.GPIO.output(self.pin, RPi.GPIO.HIGH)
-                    else:
-                        raise ValueError("Unknown lamp state with frequency 0")
-
-                self._state = new_state
+        common.BaseLamp.__init__(
+            self,
+            name,
+            on_callable=functools.partial(RPi.GPIO.output, self._pin, RPi.GPIO.HIGH),
+            off_callable=functools.partial(RPi.GPIO.output, self._pin, RPi.GPIO.LOW)
+        )
 
     def __del__(self):
-        self.state = common.OutputState.OFF
+        self.state = common.LampState.OFF
         super().__del__()

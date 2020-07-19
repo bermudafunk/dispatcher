@@ -1,6 +1,8 @@
 rpi.gpio
-aiohttp
+aiohttp~=3.6.2
 cchardet
 aiodns
-transitions
+transitions~=0.8.2
 pygraphviz
+spidev~=3.5
+prometheus_client

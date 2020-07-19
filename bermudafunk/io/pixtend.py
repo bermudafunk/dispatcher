@@ -1,14 +1,20 @@
+import asyncio
+import collections
 import enum
 import functools
+import inspect
 import struct
 import threading
 import time
 import typing
+import weakref
 
+import prometheus_client
 import spidev
 
-from .common import OutputState
-from .gpio import Output
+from .common import LampState, BaseButton, BaseLamp
+from .gpio import GPIOLamp as GPIOOutput
+from ..base.asyncio import loop
 
 # Get a precise timer for our interval timing.
 # Try to get a timer that is guaranteed to only monotonically increase.
@@ -36,21 +42,24 @@ def _calc_crc16(data):
 
 
 def _bit_getter(field_name, bit, doc=None):
-    def getter(instance) -> bool:
-        return instance.__dict__[field_name] & (1 << bit) > 0
+    def getter(instance: Pixtend) -> bool:
+        with instance.transfer_lock:
+            return instance.__dict__[field_name] & (1 << bit) > 0
 
     return property(fget=getter, doc=doc)
 
 
 def _bit_getter_setter(field_name, bit, doc=None):
-    def getter(instance) -> bool:
-        return instance.__dict__[field_name] & (1 << bit) > 0
+    def getter(instance: Pixtend) -> bool:
+        with instance.transfer_lock:
+            return instance.__dict__[field_name] & (1 << bit) > 0
 
-    def setter(instance, val: bool):
-        if bool:
-            instance.__dict__[field_name] |= (1 << bit)
-        else:
-            instance.__dict__[field_name] &= ~(1 << bit)
+    def setter(instance: Pixtend, val: bool):
+        with instance.transfer_lock:
+            if val:
+                instance.__dict__[field_name] |= (1 << bit)
+            else:
+                instance.__dict__[field_name] &= ~(1 << bit)
 
     return property(fget=getter, fset=setter, doc=doc)
 
@@ -87,17 +96,42 @@ class PixtendError(enum.Enum):
     SPI_FREQUENCY_TOO_HIGH = 0b0110
 
 
+class PixtendBaseError(Exception):
+    pass
+
+
+class CrcError(PixtendBaseError):
+    pass
+
+
+class CrcHeaderError(CrcError):
+    pass
+
+
+class CrcDataError(CrcError):
+    pass
+
+
+class ModelError(PixtendBaseError):
+    pass
+
+
 class Pixtend:
     IN_HEADER = struct.Struct('<5B 2x')
     IN_DATA = struct.Struct('<H 6H B 2H 2H 2H 2H 5x 64s')
-    IN_FORMAT = struct.Struct('<7s H 100s H')
+    IN_FORMAT_HEADER = struct.Struct('<7s H')
+    IN_FORMAT_DATA = struct.Struct('<100s H')
 
     OUT_HEADER = struct.Struct('<4B 3x')
     OUT_DATA = struct.Struct('<8B H B 4B B3H B3H B3H 64s')
     OUT_FORMAT = struct.Struct('<7s H 100s H')
 
+    SPI_TRANSFERS = prometheus_client.Counter('pixtend_spi_transfers', 'Successful spi transfers with pixtend')
+    CRC_ERRORS = prometheus_client.Counter('pixtend_crc_errors', 'CRC errors occurring in communication with pixtend', ['region'],
+                                           labelvalues=['header', 'data'])
+
     def __init__(self, communication_interval: float = 0.03, autostart=True):
-        self._transfer_lock = threading.RLock()
+        self.transfer_lock = threading.RLock()
 
         if communication_interval < 0.03:
             raise ValueError('The communication interval have to be at least 30 ms')
@@ -121,27 +155,27 @@ class Pixtend:
 
         self._retain_data_out = bytes()
 
-        self._firmware = -1
-        self._hardware = -1
-        self._model_in = -1
-        self._uc_state = -1
-        self._uc_warnings = -1
+        self._firmware = 0
+        self._hardware = 0
+        self._model_in = 0
+        self._uc_state = 0
+        self._uc_warnings = 0
 
-        self._digital_in = -1
+        self._digital_in = 0
 
-        self._analog_in_voltage = [-1] * 4
-        self._analog_in_current = [-1] * 2
+        self._analog_in_voltage = [0] * 4
+        self._analog_in_current = [0] * 2
 
-        self._gpio_in = -1
+        self._gpio_in = 0
 
-        self._temp = [-1] * 4
-        self._humid = [-1] * 4
+        self._temp = [0] * 4
+        self._humid = [0] * 4
 
         self._retain_data_in = bytes()
 
-        self._mc_enable = Output('Pixtend microcontroller spi enable', 18)
-        self._mc_enable.state = OutputState.ON
-        self._mc_reset = Output('Pixtend microcontroller reset', 16)
+        self._mc_enable = GPIOOutput('Pixtend microcontroller spi enable', 18)
+        self._mc_enable.state = LampState.ON
+        self._mc_reset = GPIOOutput('Pixtend microcontroller reset', 16)
 
         self._spi = spidev.SpiDev()
         self._spi.open(0, 1)
@@ -150,15 +184,17 @@ class Pixtend:
         self.__communication_thread = None  # type: typing.Optional[threading.Thread]
         self.__communication_thread_terminate = False
 
+        self._observer = weakref.WeakSet()  # type: typing.Set[typing.Callable]
+
         if autostart:
-            self._start_communication_thread()
+            self.start_communication_thread()
 
     def __del__(self):
-        self._stop_communication_thread()
+        self.stop_communication_thread()
         self._spi.close()
         self._spi = None
-        self._mc_enable.state = OutputState.OFF
-        self._mc_reset.state = OutputState.OFF
+        self._mc_enable.state = LampState.OFF
+        self._mc_reset.state = LampState.OFF
 
     def _pack_output(self):
         header_data = self.OUT_HEADER.pack(
@@ -186,9 +222,9 @@ class Pixtend:
         return transfer
 
     def _unpack_input(self, transfer):
-        (header_data, header_crc, data, data_crc) = self.IN_FORMAT.unpack(transfer)
+        (header_data, header_crc) = self.IN_FORMAT_HEADER.unpack(transfer[:self.IN_FORMAT_HEADER.size])
         if header_crc != _calc_crc16(header_data):
-            return
+            raise CrcHeaderError
 
         (
             self._firmware,
@@ -198,8 +234,13 @@ class Pixtend:
             self._uc_warnings,
         ) = self.IN_HEADER.unpack(header_data)
 
+        if self._model_in != self._model_out:
+            raise ModelError
+
+        (data, data_crc) = self.IN_FORMAT_HEADER.unpack(transfer[self.IN_FORMAT_HEADER.size:])
+
         if data_crc != _calc_crc16(data):
-            return
+            raise CrcDataError
 
         (
             self._digital_in,
@@ -221,7 +262,7 @@ class Pixtend:
             self._retain_data_in
         ) = self.IN_DATA.unpack(data)
 
-    def _start_communication_thread(self):
+    def start_communication_thread(self):
         if self.__communication_thread is not None:
             raise RuntimeWarning('Communication thread is already running')
 
@@ -233,7 +274,7 @@ class Pixtend:
         )
         self.__communication_thread.start()
 
-    def _stop_communication_thread(self):
+    def stop_communication_thread(self):
         if self.__communication_thread is None:
             raise RuntimeWarning('Communication thread is not running anymore')
 
@@ -242,10 +283,17 @@ class Pixtend:
         self.__communication_thread = None
 
     def _spi_communicate(self):
-        with self._transfer_lock:
+        with self.transfer_lock:
             data = self._pack_output()
             resp = self._spi.xfer2(data)
-            self._unpack_input(resp)
+            try:
+                self._unpack_input(resp)
+                self._trigger_observer()
+            except CrcHeaderError:
+                self.CRC_ERRORS.labels('header').inc()
+            except CrcDataError:
+                self.CRC_ERRORS.labels('data').inc()
+            self.SPI_TRANSFERS.inc()
 
     def _spi_communication_loop(self):
         next_com = timer()
@@ -265,6 +313,27 @@ class Pixtend:
             # Calculate the duration to the next auto mode deadline
             # and sleep until then.
             time.sleep(next_com - now)
+
+    def add_observer(self, handler: typing.Callable):
+        if not isinstance(handler, collections.abc.Hashable):
+            raise TypeError("The supplied handler isn't hashable")
+        if not isinstance(handler, collections.abc.Callable):
+            raise TypeError("The supplied handler isn't callable")
+        self._observer.add(handler)
+
+    def remove_observer(self, handler: typing.Callable):
+        if not isinstance(handler, collections.abc.Hashable):
+            raise TypeError("The supplied handler isn't hashable")
+        if not isinstance(handler, collections.abc.Callable):
+            raise TypeError("The supplied handler isn't callable")
+        self._observer.remove(handler)
+
+    def _trigger_observer(self):
+        for trigger in self._observer:
+            if inspect.iscoroutinefunction(trigger):
+                asyncio.run_coroutine_threadsafe(trigger(), loop)
+            else:
+                trigger()
 
     safe = _bit_getter_setter('_uc_ctrl_1', 0)
     retain_copy = _bit_getter_setter('_uc_ctrl_1', 1)
@@ -295,8 +364,6 @@ class Pixtend:
     def digital_in(self, channel: int) -> bool:
         if not (0 <= channel <= 15):
             raise ValueError('Digital input channel must be between 0 and 15')
-        if self._digital_in < 0:
-            raise RuntimeError('No successful transfer between Pixtend and Pi yet')
         return self._digital_in & (1 << channel) > 0
 
     def digital_in_debounce_cycles(self, channel_duo: int, val: typing.Optional[int] = None) -> int:
@@ -360,8 +427,6 @@ class Pixtend:
             raise ValueError('GPIO input channel must be between 0 and 3')
         if self.gpio_ctrl(channel) is not PixtendGPIOSetting.INPUT:
             raise RuntimeError('GPIO channel must be configured as INPUT')
-        if self._gpio_in < 0:
-            raise RuntimeError('No successful transfer between Pixtend and Pi yet')
         return self._gpio_in & (1 << channel) > 0
 
     def gpio_pullup(self, channel: int, val: typing.Optional[bool] = None) -> bool:
@@ -407,15 +472,11 @@ class Pixtend:
     def analog_in_voltage(self, channel) -> float:
         if not (0 <= channel <= 3):
             raise ValueError('Analog input voltage channel must be between 0 and 3')
-        if self._analog_in_voltage[channel] < 0:
-            raise RuntimeError('No successful transfer between Pixtend and Pi yet')
         return self._analog_in_voltage[channel] * 10 / 1024
 
     def analog_in_current(self, channel) -> float:
         if not (4 <= channel <= 5):
             raise ValueError('Analog input current channel must be between 4 and 5')
-        if self._analog_in_current[channel - 4] < 0:
-            raise RuntimeError('No successful transfer between Pixtend and Pi yet')
         return self._analog_in_current[channel - 4] * 0.020158400229358
 
     @property
@@ -428,3 +489,33 @@ class Pixtend:
         if not (0 <= val <= 10):
             raise ValueError('UCCtrl0 / Watchdog has to be between 0 and 10')
         self._uc_ctrl_0 = val
+
+
+class PixtendButton(BaseButton):
+    def __init__(self, name: str, pixtend: Pixtend, channel: int, default_value=False):
+        super().__init__(name)
+        self._pixtend = pixtend
+        self._channel = channel
+        self._default_value = default_value
+
+        self._old_value = self._pixtend.digital_in(self._channel)
+
+    def _pixtend_trigger(self):
+        new_value = self._pixtend.digital_in(self._channel)
+        if new_value != self._old_value:
+            self._old_value = new_value
+            if new_value != self._default_value:
+                self.trigger_event()
+
+
+class PixtendLamp(BaseLamp):
+    def __init__(self, name: str, pixtend: Pixtend, channel: int):
+        self._pixtend = pixtend
+        self._channel = channel
+        BaseLamp.__init__(
+            self,
+            name,
+            on_callable=functools.partial(self._pixtend.digital_out, self._channel, True),
+            off_callable=functools.partial(self._pixtend.digital_out, self._channel, False)
+        )
+        self.state = LampState.OFF

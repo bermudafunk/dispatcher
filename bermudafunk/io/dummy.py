@@ -2,12 +2,12 @@ import logging
 import typing
 
 from . import common
-from .common import OutputState, ButtonEvent
+from .common import LampState, ButtonEvent
 
 logger = logging.getLogger(__name__)
 
 
-class DummyInput(common.BaseInput):
+class DummyButton(common.BaseButton):
     def add_handler(self, handler: typing.Callable[[ButtonEvent], None]):
         super().add_handler(handler)
         logger.info("Added handler {} to button {}".format(handler, self.name))
@@ -17,18 +17,18 @@ class DummyInput(common.BaseInput):
         logger.info("Removed handler {} to button {}".format(handler, self.name))
 
 
-class DummyOutput(common.BaseOutput):
+class DummyLamp(common.BaseLamp):
     def __init__(self, name: str):
         super().__init__(name)
-        self._state = common.OutputState.OFF
+        self._state = common.LampState.OFF
 
     @property
-    def state(self) -> OutputState:
+    def state(self) -> LampState:
         return self._state
 
     @state.setter
-    def state(self, state: OutputState):
+    def state(self, state: LampState):
         logger.info("Setting state of lamp {} to {}".format(self.name, state))
-        if not isinstance(state, OutputState):
+        if not isinstance(state, LampState):
             raise TypeError("Supplied state {} is not a instance of LampState".format(state))
         self._state = state
