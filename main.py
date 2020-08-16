@@ -1,8 +1,8 @@
-import bermudafunk.dispatcher
 from bermudafunk import base
 from bermudafunk.SymNet import SymNetDevice
 from bermudafunk.dispatcher import web
 from bermudafunk.dispatcher.data_types import DispatcherStudioDefinition, Studio, Automat
+from bermudafunk.dispatcher.dispatcher import Dispatcher
 from bermudafunk.io.pixtend import PixtendLamp, Pixtend
 
 if __name__ == '__main__':
@@ -39,7 +39,7 @@ if __name__ == '__main__':
         yellow_led=PixtendLamp(name='AF2 Yellow', channel=7, pixtend=pixtend),
     )
 
-    dispatcher = bermudafunk.dispatcher.Dispatcher(
+    dispatcher = Dispatcher(
         symnet_controller=main_selector,
         automat=DispatcherStudioDefinition(
             studio=automat,
