@@ -11,7 +11,7 @@ from transitions import EventData, MachineError
 
 import bermudafunk.SymNet
 from bermudafunk import base
-from bermudafunk.dispatcher.data_types import Studio, StudioLampStatus, ButtonEvent, Button, DispatcherStudioDefinition
+from bermudafunk.dispatcher.data_types import BaseStudio, Studio, Automat, StudioLampStatus, ButtonEvent, Button, DispatcherStudioDefinition
 from bermudafunk.dispatcher.transitions import LampAwareMachine as Machine, LampAwareState, LampStateTarget, States, transitions
 
 logger = logging.getLogger(__name__)
@@ -40,14 +40,12 @@ class Dispatcher:
     They are activated if the name of the timer is contained in the state name.
     The timers are not reset if the name of the timer is in both src and dest state name.
     """
-    AUTOMAT = 'automat'
-
     _save_state = typing.NamedTuple('_save_state', [('x', str), ('y', str), ('state', str)])
 
     def __init__(self,
                  symnet_controller: bermudafunk.SymNet.SymNetSelectorController,
-                 automat_selector_value: int,
-                 studios: typing.List[DispatcherStudioDefinition],
+                 automat: DispatcherStudioDefinition,
+                 dispatcher_studios: typing.List[DispatcherStudioDefinition],
                  audit_internal_state=False,
                  immediate_state_time=300,
                  immediate_release_time=30
@@ -108,28 +106,28 @@ class Dispatcher:
         self._dispatcher_button_event_queue = asyncio.Queue(maxsize=1, loop=base.loop)
 
         # the value of the automat source in the SymNetSelectorController
-        assert 1 <= automat_selector_value <= symnet_controller.position_count, "Automat selector value {} have to be in the range of valid selector values [1, {}]".format(
-            automat_selector_value, symnet_controller.position_count)
-        self._automat_selector_value = automat_selector_value
+        assert 1 <= automat.selector_value <= symnet_controller.position_count, "Automat selector value {} have to be in the range of valid selector values [1, {}]".format(
+            automat.selector_value, symnet_controller.position_count)
+        self._automat = automat
 
         # studios to switch between and automat
         self._studios = []  # type: typing.List[Studio]
         # caching dictionaries to provide lookups
         self._studios_to_selector_value = {}  # type: typing.Dict[Studio, int]
         self._selector_value_to_studio = {}  # type: typing.Dict[int, Studio]
-        for studio in studios:
-            assert studio.selector_value not in self._selector_value_to_studio.keys()
-            self._studios.append(studio.studio)
-            self._studios_to_selector_value[studio.studio] = studio.selector_value
-            self._selector_value_to_studio[studio.selector_value] = studio.studio
-            studio.studio.dispatcher_button_event_queue = self._dispatcher_button_event_queue
+        for dispatcher_studio in dispatcher_studios:
+            assert dispatcher_studio.selector_value not in self._selector_value_to_studio.keys()
+            self._studios.append(dispatcher_studio.studio)
+            self._studios_to_selector_value[dispatcher_studio.studio] = dispatcher_studio.selector_value
+            self._selector_value_to_studio[dispatcher_studio.selector_value] = dispatcher_studio.studio
+            dispatcher_studio.studio.dispatcher_button_event_queue = self._dispatcher_button_event_queue
 
-        assert self._automat_selector_value not in self._selector_value_to_studio.keys(), "Automat selector value als assigned to a studio"
-        assert Dispatcher.AUTOMAT not in self._studios_to_selector_value.keys(), "A studio has the magic studio name 'automat'"
+        assert self._automat.selector_value not in self._selector_value_to_studio.keys(), "Automat selector value als assigned to a studio"
+        assert self._automat.studio not in self._studios_to_selector_value.keys(), "A studio has the magic studio name 'automat'"
 
         # on air selector value hold the value we expect to be set in the SymNetSelectorController
         self.__on_air_selector_value = 0  # type: int
-        self._on_air_selector_value = self._automat_selector_value
+        self._on_air_selector_value = self._automat.selector_value
 
         # == State machine initialization ==
 
@@ -203,8 +201,8 @@ class Dispatcher:
 
     @property
     def on_air_studio_name(self) -> str:
-        if self._on_air_selector_value == self._automat_selector_value:
-            return Dispatcher.AUTOMAT
+        if self._on_air_selector_value == self._automat.selector_value:
+            return self._automat.studio.name
         return self._selector_value_to_studio[self._on_air_selector_value].name
 
     @property
@@ -215,12 +213,16 @@ class Dispatcher:
     def studios(self) -> typing.List[Studio]:
         return self._studios
 
+    @property
+    def studios_with_automat(self) -> typing.List[BaseStudio]:
+        return [self._automat.studio] + self._studios
+
     def _prepare_switch_to_y(self, _: EventData = None):
         self._x, self._y = self._y, None
 
     def _change_to_automat(self, _: EventData = None):
         logger.debug('change to automat')
-        self._on_air_selector_value = self._automat_selector_value
+        self._on_air_selector_value = self._automat.selector_value
         base.loop.create_task(self._set_current_state())
 
     def _change_to_studio(self, _: EventData = None):
@@ -314,6 +316,7 @@ class Dispatcher:
         """Set the led state in studios"""
         logger.debug('assure led status')
         new_led_state = self._machine.get_state(self._machine.state).led_state_target  # type: LampStateTarget
+        self._automat.studio.led_status_typed = new_led_state.automat
         for studio in self._studios:
             if studio == self._x:
                 logger.debug(new_led_state.x)

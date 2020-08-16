@@ -7,9 +7,11 @@ import itertools
 import threading
 import time
 import typing
+import logging
 
 from bermudafunk.base import loop
 
+logger = logging.getLogger(__name__)
 
 class BaseButton(abc.ABC):
     def __init__(self, name: str):
@@ -82,6 +84,7 @@ class BaseLamp(abc.ABC):
 
     @state.setter
     def state(self, new_state: LampState):
+        logger.debug('Lamp with name <{}> set state <{}>'.format(self.name, new_state))
         if not isinstance(new_state, LampState):
             raise ValueError("This supports only values of {}".format(type(LampState)))
         with self._lock:

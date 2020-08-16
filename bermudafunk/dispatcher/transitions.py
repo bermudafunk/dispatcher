@@ -10,7 +10,15 @@ from bermudafunk.dispatcher.data_types import StudioLampStatus, LampState
 GraphMachine.style_attributes['node']['default']['shape'] = 'octagon'
 GraphMachine.style_attributes['node']['active']['shape'] = 'doubleoctagon'
 
-LampStateTarget = typing.NamedTuple('LedStateTarget', [('x', StudioLampStatus), ('y', StudioLampStatus), ('other', StudioLampStatus)])
+LampStateTarget = typing.NamedTuple(
+    'LampStateTarget',
+    [
+        ('automat', StudioLampStatus),
+        ('x', StudioLampStatus),
+        ('y', StudioLampStatus),
+        ('other', StudioLampStatus)
+    ]
+)
 
 
 class LampAwareState(State):
@@ -84,6 +92,11 @@ class LampAwareMachine(Machine):
 # @enum.unique
 class States(LampAwareState, enum.Enum):
     AUTOMAT_ON_AIR = ('automat_on_air', LampStateTarget(
+        automat=StudioLampStatus(
+            green=LampState.ON,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
+        ),
         x=StudioLampStatus(
             green=LampState.OFF,
             yellow=LampState.OFF,
@@ -101,6 +114,11 @@ class States(LampAwareState, enum.Enum):
         )
     ))
     AUTOMAT_ON_AIR_IMMEDIATE_STATE_X = ('automat_on_air_immediate_state_X', LampStateTarget(
+        automat=StudioLampStatus(
+            green=LampState.ON,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
+        ),
         x=StudioLampStatus(
             green=LampState.OFF,
             yellow=LampState.OFF,
@@ -118,6 +136,11 @@ class States(LampAwareState, enum.Enum):
         )
     ))
     FROM_AUTOMAT_ON_AIR_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR = ('from_automat_on_air_change_to_studio_X_on_next_hour', LampStateTarget(
+        automat=StudioLampStatus(
+            green=LampState.ON,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
+        ),
         x=StudioLampStatus(
             green=LampState.BLINK,
             yellow=LampState.OFF,
@@ -135,6 +158,11 @@ class States(LampAwareState, enum.Enum):
         )
     ))
     STUDIO_X_ON_AIR = ('studio_X_on_air', LampStateTarget(
+        automat=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
+        ),
         x=StudioLampStatus(
             green=LampState.ON,
             yellow=LampState.OFF,
@@ -152,6 +180,11 @@ class States(LampAwareState, enum.Enum):
         )
     ))
     FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR = ('from_studio_X_on_air_change_to_automat_on_next_hour', LampStateTarget(
+        automat=StudioLampStatus(
+            green=LampState.BLINK,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
+        ),
         x=StudioLampStatus(
             green=LampState.ON,
             yellow=LampState.BLINK,
@@ -169,6 +202,11 @@ class States(LampAwareState, enum.Enum):
         )
     ))
     STUDIO_X_ON_AIR_IMMEDIATE_STATE = ('studio_X_on_air_immediate_state', LampStateTarget(
+        automat=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
+        ),
         x=StudioLampStatus(
             green=LampState.ON,
             yellow=LampState.OFF,
@@ -186,6 +224,11 @@ class States(LampAwareState, enum.Enum):
         )
     ))
     STUDIO_X_ON_AIR_IMMEDIATE_RELEASE = ('studio_X_on_air_immediate_release', LampStateTarget(
+        automat=StudioLampStatus(
+            green=LampState.BLINK_FAST,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
+        ),
         x=StudioLampStatus(
             green=LampState.ON,
             yellow=LampState.BLINK,
@@ -203,6 +246,11 @@ class States(LampAwareState, enum.Enum):
         )
     ))
     FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR = ('from_studio_X_on_air_change_to_studio_Y_on_next_hour', LampStateTarget(
+        automat=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
+        ),
         x=StudioLampStatus(
             green=LampState.ON,
             yellow=LampState.ON,
@@ -220,6 +268,11 @@ class States(LampAwareState, enum.Enum):
         )
     ))
     STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST = ('studio_X_on_air_studio_Y_takeover_request', LampStateTarget(
+        automat=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
+        ),
         x=StudioLampStatus(
             green=LampState.ON,
             yellow=LampState.BLINK,
@@ -237,6 +290,11 @@ class States(LampAwareState, enum.Enum):
         )
     ))
     NOOP = ('noop', LampStateTarget(
+        automat=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
+        ),
         x=StudioLampStatus(
             green=LampState.OFF,
             yellow=LampState.OFF,
@@ -274,7 +332,8 @@ transitions = [
 
     {'trigger': 'takeover_X', 'source': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR, 'dest': States.STUDIO_X_ON_AIR},
     {'trigger': 'release_X', 'source': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR, 'dest': States.STUDIO_X_ON_AIR},
-    {'trigger': 'takeover_Y', 'source': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR, 'dest': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR},
+    {'trigger': 'takeover_Y', 'source': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR,
+     'dest': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR},
     {'trigger': 'next_hour', 'source': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR, 'dest': States.AUTOMAT_ON_AIR},
 
     {'trigger': 'immediate_X', 'source': States.STUDIO_X_ON_AIR_IMMEDIATE_STATE, 'dest': States.STUDIO_X_ON_AIR},
@@ -286,11 +345,15 @@ transitions = [
     {'trigger': 'takeover_Y', 'source': States.STUDIO_X_ON_AIR_IMMEDIATE_RELEASE, 'dest': States.STUDIO_X_ON_AIR, 'switch_to_y': True},
     {'trigger': 'immediate_release_timeout', 'source': States.STUDIO_X_ON_AIR_IMMEDIATE_RELEASE, 'dest': States.AUTOMAT_ON_AIR},
 
-    {'trigger': 'takeover_Y', 'source': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR, 'dest': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR},
-    {'trigger': 'release_Y', 'source': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR, 'dest': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR},
-    {'trigger': 'next_hour', 'source': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR, 'dest': States.STUDIO_X_ON_AIR, 'switch_to_y': True},
+    {'trigger': 'takeover_Y', 'source': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR,
+     'dest': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR},
+    {'trigger': 'release_Y', 'source': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR,
+     'dest': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR},
+    {'trigger': 'next_hour', 'source': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR, 'dest': States.STUDIO_X_ON_AIR,
+     'switch_to_y': True},
 
     {'trigger': 'takeover_Y', 'source': States.STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST, 'dest': States.STUDIO_X_ON_AIR},
     {'trigger': 'release_Y', 'source': States.STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST, 'dest': States.STUDIO_X_ON_AIR},
-    {'trigger': 'release_X', 'source': States.STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST, 'dest': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR},
+    {'trigger': 'release_X', 'source': States.STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST,
+     'dest': States.FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR},
 ]

@@ -9,7 +9,7 @@ import aiohttp
 from aiohttp import web
 
 import bermudafunk.base
-from bermudafunk.dispatcher import Studio, ButtonEvent, Button, Dispatcher
+from bermudafunk.dispatcher import BaseStudio, ButtonEvent, Button, Dispatcher
 
 logger = logging.getLogger(__name__)
 
@@ -52,14 +52,18 @@ async def run(dispatcher: Dispatcher):
     async def list_studios(_: web.Request) -> web.StreamResponse:
         return web.json_response(dispatcher.status)
 
-    @routes.get('/api/v1/studios')
+    @routes.get('/api/v1/studio_lamp_names')
+    async def list_studios(_: web.Request) -> web.StreamResponse:
+        return web.json_response([studio.name for studio in dispatcher.studios_with_automat])
+
+    @routes.get('/api/v1/studio_names')
     async def list_studios(_: web.Request) -> web.StreamResponse:
         return web.json_response([studio.name for studio in dispatcher.studios])
 
     @routes.get('/api/v1/{studio_name}/press/{button}')
     async def button_press(request: web.Request) -> web.StreamResponse:
         event = ButtonEvent(
-            studio=Studio.names[request.match_info['studio_name']],
+            studio=BaseStudio.names[request.match_info['studio_name']],
             button=Button(request.match_info['button'])
         )
 
@@ -69,7 +73,7 @@ async def run(dispatcher: Dispatcher):
 
     @routes.get('/api/v1/{studio_name}/leds')
     async def led_status(request: web.Request) -> web.StreamResponse:
-        studio = Studio.names[request.match_info['studio_name']]
+        studio = BaseStudio.names[request.match_info['studio_name']]
 
         return web.json_response(studio.led_status)
 
@@ -80,7 +84,7 @@ async def run(dispatcher: Dispatcher):
 
         _websockets.add(ws)
         await ws.send_str(dispatcher_status_msg())
-        for studio in dispatcher.studios:
+        for studio in dispatcher.studios_with_automat:
             await ws.send_str(led_status_msg(studio))
 
         try:
@@ -97,7 +101,7 @@ async def run(dispatcher: Dispatcher):
                             if req['type'] == 'dispatcher.status':
                                 await ws.send_str(dispatcher_status_msg())
                             elif req['type'] == 'studio.led.status':
-                                await ws.send_str(led_status_msg(Studio.names[req['studio']]))
+                                await ws.send_str(led_status_msg(BaseStudio.names[req['studio']]))
                         except json.JSONDecodeError as e:
                             await ws.send_str(json.dumps({'kind': 'error', 'exception': str(e)}))
                         except TypeError as e:
@@ -125,7 +129,7 @@ async def run(dispatcher: Dispatcher):
             await observer_event.wait()
             for ws in _websockets:
                 await ws.send_str(dispatcher_status_msg())
-                for studio in dispatcher.studios:
+                for studio in dispatcher.studios_with_automat:
                     await ws.send_str(led_status_msg(studio))
 
             observer_event.clear()
@@ -133,7 +137,7 @@ async def run(dispatcher: Dispatcher):
     def dispatcher_status_msg():
         return json.dumps({'kind': 'dispatcher.status', 'payload': dispatcher.status})
 
-    def led_status_msg(studio: Studio):
+    def led_status_msg(studio: BaseStudio):
         return json.dumps({'kind': 'studio.led.status', 'payload': {'studio': studio.name, 'status': studio.led_status}})
 
     app.add_routes(routes)

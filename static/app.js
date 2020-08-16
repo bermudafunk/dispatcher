@@ -20,7 +20,6 @@ const update_selected_studio = function (new_value) {
         selected_studio = null;
     } else {
         selected_studio = new_value;
-        connection.send(JSON.stringify({type: 'studio.led.status', studio: selected_studio}));
     }
     console.log(selected_studio);
 };
@@ -76,21 +75,28 @@ graph_buttons.click(function (event) {
 });
 
 $.get(
-    '/api/v1/studios',
+    '/api/v1/studio_names',
     function (data) {
         const studio_selector = $('#studio_selector');
         studio_selector.empty();
         studio_selector.append($('<option></option>'));
 
+        data.forEach(function (studio) {
+            studio_selector.append(
+                $('<option value="' + studio + '">' + studio + '</option>')
+            );
+        });
+    }
+);
+
+$.get(
+    '/api/v1/studio_lamp_names',
+    function (data) {
         const leds_table = $('#leds');
         let row_template = $('tr', leds_table).clone();
         leds_table.empty();
 
         data.forEach(function (studio) {
-            studio_selector.append(
-                $('<option value="' + studio + '">' + studio + '</option>')
-            );
-
             let led_entry = {
                 'row': row_template.clone()
             };

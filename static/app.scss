@@ -52,15 +52,15 @@ $blink-default-freq: 2;
 
     .led {
         &.#{$led-color} {
-            &[data-state='off'] {
+            &[data-state^='off'] {
                 background-color: $off-color;
             }
 
-            &[data-state='on'] {
+            &[data-state^='on'] {
                 background-color: $on-color;
             }
 
-            &[data-state='blink'] {
+            &[data-state^='blink'] {
                 animation-name: blink-#{$led-color};
                 animation-duration: #{(1/$blink-default-freq)}s;
                 animation-iteration-count: infinite;
