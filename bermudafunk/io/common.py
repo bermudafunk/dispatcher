@@ -136,9 +136,9 @@ class Blinker(threading.Thread):
     def run(self):
         for caller in itertools.cycle(self._output_caller):
             caller()
+            time.sleep(self._time_to_sleep)
             if self._stop_event.is_set():
                 break
-            time.sleep(self._time_to_sleep)
 
     def stop(self):
         self._stop_event.set()
