@@ -8,7 +8,7 @@ import threading
 import time
 import typing
 
-from bermudafunk.base.asyncio import loop
+from bermudafunk.base import loop
 
 
 class BaseButton(abc.ABC):

@@ -2,29 +2,29 @@ import enum
 import typing
 
 from transitions import State
-from transitions.extensions import LockedGraphMachine as Machine
+from transitions.extensions import GraphMachine as Machine
 from transitions.extensions.diagrams import GraphMachine
 
-from bermudafunk.dispatcher.data_types import StudioLedStatus, LedStatus, LedState
+from bermudafunk.dispatcher.data_types import StudioLampStatus, LampState
 
 GraphMachine.style_attributes['node']['default']['shape'] = 'octagon'
 GraphMachine.style_attributes['node']['active']['shape'] = 'doubleoctagon'
 
-LedStateTarget = typing.NamedTuple('LedStateTarget', [('x', StudioLedStatus), ('y', StudioLedStatus), ('other', StudioLedStatus)])
+LampStateTarget = typing.NamedTuple('LedStateTarget', [('x', StudioLampStatus), ('y', StudioLampStatus), ('other', StudioLampStatus)])
 
 
-class LedAwareState(State):
-    def __init__(self, name, led_state_target: LedStateTarget, on_enter=None, on_exit=None, ignore_invalid_triggers=False):
+class LampAwareState(State):
+    def __init__(self, name, led_state_target: LampStateTarget, on_enter=None, on_exit=None, ignore_invalid_triggers=False):
         super().__init__(name, on_enter, on_exit, ignore_invalid_triggers)
         self._led_state_target = led_state_target
 
     @property
-    def led_state_target(self) -> LedStateTarget:
+    def led_state_target(self) -> LampStateTarget:
         return self._led_state_target
 
 
-class LedAwareMachine(Machine):
-    state_cls = LedAwareState
+class LampAwareMachine(Machine):
+    state_cls = LampAwareState
 
     def add_states(self, states, on_enter=None, on_exit=None,
                    ignore_invalid_triggers=None, **kwargs):
@@ -81,183 +81,176 @@ class LedAwareMachine(Machine):
                         self.add_transition('to_%s' % a_state, state.name, a_state)
 
 
-class LedStatuses(enum.Enum):
-    OFF = LedStatus(state=LedState.OFF, blink_freq=2)
-    ON = LedStatus(state=LedState.ON, blink_freq=2)
-    BLINK = LedStatus(state=LedState.BLINK, blink_freq=2)
-    BLINK_FAST = LedStatus(state=LedState.BLINK, blink_freq=4)
-
-
 # @enum.unique
-class States(LedAwareState, enum.Enum):
-    AUTOMAT_ON_AIR = ('automat_on_air', LedStateTarget(
-        x=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+class States(LampAwareState, enum.Enum):
+    AUTOMAT_ON_AIR = ('automat_on_air', LampStateTarget(
+        x=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
         ),
-        y=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+        y=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
         ),
-        other=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+        other=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
         )
     ))
-    AUTOMAT_ON_AIR_IMMEDIATE_STATE_X = ('automat_on_air_immediate_state_X', LedStateTarget(
-        x=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.ON.value,
+    AUTOMAT_ON_AIR_IMMEDIATE_STATE_X = ('automat_on_air_immediate_state_X', LampStateTarget(
+        x=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.ON,
         ),
-        y=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+        y=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
         ),
-        other=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+        other=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
         )
     ))
-    FROM_AUTOMAT_ON_AIR_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR = ('from_automat_on_air_change_to_studio_X_on_next_hour', LedStateTarget(
-        x=StudioLedStatus(
-            green=LedStatuses.BLINK.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+    FROM_AUTOMAT_ON_AIR_CHANGE_TO_STUDIO_X_ON_NEXT_HOUR = ('from_automat_on_air_change_to_studio_X_on_next_hour', LampStateTarget(
+        x=StudioLampStatus(
+            green=LampState.BLINK,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
         ),
-        y=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+        y=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
         ),
-        other=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+        other=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
         )
     ))
-    STUDIO_X_ON_AIR = ('studio_X_on_air', LedStateTarget(
-        x=StudioLedStatus(
-            green=LedStatuses.ON.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+    STUDIO_X_ON_AIR = ('studio_X_on_air', LampStateTarget(
+        x=StudioLampStatus(
+            green=LampState.ON,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
         ),
-        y=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+        y=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
         ),
-        other=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+        other=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
         )
     ))
-    FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR = ('from_studio_X_on_air_change_to_automat_on_next_hour', LedStateTarget(
-        x=StudioLedStatus(
-            green=LedStatuses.ON.value,
-            yellow=LedStatuses.BLINK.value,
-            red=LedStatuses.OFF.value,
+    FROM_STUDIO_X_ON_AIR_CHANGE_TO_AUTOMAT_ON_NEXT_HOUR = ('from_studio_X_on_air_change_to_automat_on_next_hour', LampStateTarget(
+        x=StudioLampStatus(
+            green=LampState.ON,
+            yellow=LampState.BLINK,
+            red=LampState.OFF,
         ),
-        y=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+        y=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
         ),
-        other=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+        other=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
         )
     ))
-    STUDIO_X_ON_AIR_IMMEDIATE_STATE = ('studio_X_on_air_immediate_state', LedStateTarget(
-        x=StudioLedStatus(
-            green=LedStatuses.ON.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.ON.value,
+    STUDIO_X_ON_AIR_IMMEDIATE_STATE = ('studio_X_on_air_immediate_state', LampStateTarget(
+        x=StudioLampStatus(
+            green=LampState.ON,
+            yellow=LampState.OFF,
+            red=LampState.ON,
         ),
-        y=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+        y=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
         ),
-        other=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+        other=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
         )
     ))
-    STUDIO_X_ON_AIR_IMMEDIATE_RELEASE = ('studio_X_on_air_immediate_release', LedStateTarget(
-        x=StudioLedStatus(
-            green=LedStatuses.ON.value,
-            yellow=LedStatuses.BLINK.value,
-            red=LedStatuses.ON.value,
+    STUDIO_X_ON_AIR_IMMEDIATE_RELEASE = ('studio_X_on_air_immediate_release', LampStateTarget(
+        x=StudioLampStatus(
+            green=LampState.ON,
+            yellow=LampState.BLINK,
+            red=LampState.ON,
         ),
-        y=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+        y=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
         ),
-        other=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.BLINK.value,
-            red=LedStatuses.BLINK.value,
+        other=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.BLINK,
+            red=LampState.BLINK,
         )
     ))
-    FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR = ('from_studio_X_on_air_change_to_studio_Y_on_next_hour', LedStateTarget(
-        x=StudioLedStatus(
-            green=LedStatuses.ON.value,
-            yellow=LedStatuses.ON.value,
-            red=LedStatuses.OFF.value,
+    FROM_STUDIO_X_ON_AIR_CHANGE_TO_STUDIO_Y_ON_NEXT_HOUR = ('from_studio_X_on_air_change_to_studio_Y_on_next_hour', LampStateTarget(
+        x=StudioLampStatus(
+            green=LampState.ON,
+            yellow=LampState.ON,
+            red=LampState.OFF,
         ),
-        y=StudioLedStatus(
-            green=LedStatuses.BLINK.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+        y=StudioLampStatus(
+            green=LampState.BLINK,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
         ),
-        other=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+        other=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
         )
     ))
-    STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST = ('studio_X_on_air_studio_Y_takeover_request', LedStateTarget(
-        x=StudioLedStatus(
-            green=LedStatuses.ON.value,
-            yellow=LedStatuses.BLINK.value,
-            red=LedStatuses.OFF.value,
+    STUDIO_X_ON_AIR_STUDIO_Y_TAKEOVER_REQUEST = ('studio_X_on_air_studio_Y_takeover_request', LampStateTarget(
+        x=StudioLampStatus(
+            green=LampState.ON,
+            yellow=LampState.BLINK,
+            red=LampState.OFF,
         ),
-        y=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.ON.value,
-            red=LedStatuses.OFF.value,
+        y=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.ON,
+            red=LampState.OFF,
         ),
-        other=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+        other=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
         )
     ))
-    NOOP = ('noop', LedStateTarget(
-        x=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+    NOOP = ('noop', LampStateTarget(
+        x=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
         ),
-        y=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+        y=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
         ),
-        other=StudioLedStatus(
-            green=LedStatuses.OFF.value,
-            yellow=LedStatuses.OFF.value,
-            red=LedStatuses.OFF.value,
+        other=StudioLampStatus(
+            green=LampState.OFF,
+            yellow=LampState.OFF,
+            red=LampState.OFF,
         )
     ))
 

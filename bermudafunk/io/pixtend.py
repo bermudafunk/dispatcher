@@ -13,9 +13,9 @@ import typing
 import prometheus_client
 import spidev
 
-from .common import LampState, BaseButton, BaseLamp
-from .gpio import GPIOLamp as GPIOOutput
-from ..base.asyncio import loop
+from bermudafunk.base import loop, cleanup_event
+from bermudafunk.io.common import LampState, BaseButton, BaseLamp
+from bermudafunk.io.gpio import GPIOLamp as GPIOOutput
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +194,12 @@ class Pixtend:
         if autostart:
             self.start_communication_thread()
 
+    async def cleanup_aware_shutdown(self):
+        logger.debug("Awaiting cleanup event now")
+        await cleanup_event.wait()
+        logger.debug("Cleanup event received in Pixtend")
+        self.stop_communication_thread()
+
     def __del__(self):
         self.stop_communication_thread()
         self._spi.close()
@@ -281,7 +287,7 @@ class Pixtend:
 
     def stop_communication_thread(self):
         if self.__communication_thread is None:
-            raise RuntimeWarning('Communication thread is not running anymore')
+            return
 
         self.__communication_thread_terminate = True
         self.__communication_thread.join()

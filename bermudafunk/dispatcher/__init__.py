@@ -11,8 +11,8 @@ from transitions import EventData, MachineError
 
 import bermudafunk.SymNet
 from bermudafunk import base
-from bermudafunk.dispatcher.data_types import Studio, StudioLedStatus, LedStatus, ButtonEvent, Button, DispatcherStudioDefinition
-from bermudafunk.dispatcher.transitions import LedAwareMachine as Machine, LedAwareState, LedStateTarget, States, transitions
+from bermudafunk.dispatcher.data_types import Studio, StudioLampStatus, ButtonEvent, Button, DispatcherStudioDefinition
+from bermudafunk.dispatcher.transitions import LampAwareMachine as Machine, LampAwareState, LampStateTarget, States, transitions
 
 logger = logging.getLogger(__name__)
 
@@ -141,9 +141,6 @@ class Dispatcher:
         self.__y = None
         self._y = None  # type: typing.Optional[Studio]
 
-        # Collect state objects from States Enum
-        states = [state.value for _, state in States.__members__.items()]
-
         States.AUTOMAT_ON_AIR.add_callback('enter', self._change_to_automat)
         States.STUDIO_X_ON_AIR.add_callback('enter', self._change_to_studio)
 
@@ -177,7 +174,8 @@ class Dispatcher:
             for kind in ['X', 'Y']:
                 trigger_name = button.name + '_' + kind
                 if trigger_name not in self._machine.events.keys():
-                    self._machine.add_transition(trigger=trigger_name, source='noop', dest='noop')  # noops to complete all combinations of buttons presses
+                    self._machine.add_transition(trigger=trigger_name, source='noop',
+                                                 dest='noop')  # noops to complete all combinations of buttons presses
 
         self._machine_observers = weakref.WeakSet()  # type: typing.Set[typing.Callable[[Dispatcher], typing.Any]]
 
@@ -315,7 +313,7 @@ class Dispatcher:
     def _assure_led_status(self, _: EventData = None):
         """Set the led state in studios"""
         logger.debug('assure led status')
-        new_led_state = self._machine.get_state(self._machine.state).led_state_target  # type: LedStateTarget
+        new_led_state = self._machine.get_state(self._machine.state).led_state_target  # type: LampStateTarget
         for studio in self._studios:
             if studio == self._x:
                 logger.debug(new_led_state.x)

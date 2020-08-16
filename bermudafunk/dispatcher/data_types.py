@@ -1,22 +1,22 @@
 import asyncio
 import enum
+import functools
 import typing
 
-from bermudafunk import GPIO
-from bermudafunk.GPIO import LedState
+from bermudafunk.io.common import BaseLamp, LampState, BaseButton
+from bermudafunk.io.dummy import DummyLamp
 
 
 @enum.unique
-class StudioLeds(enum.Enum):
+class StudioLamps(enum.Enum):
     red = 'red'
     yellow = 'yellow'
     green = 'green'
 
 
-LedStatus = typing.NamedTuple('LedStatus', [('state', LedState), ('blink_freq', float)])
-StudioLedStatus = typing.NamedTuple('StudioLedStatus', [('green', LedStatus),
-                                                        ('yellow', LedStatus),
-                                                        ('red', LedStatus)])
+StudioLampStatus = typing.NamedTuple('StudioLampStatus', [('green', LampState),
+                                                         ('yellow', LampState),
+                                                         ('red', LampState)])
 
 
 @enum.unique
@@ -31,99 +31,99 @@ class Studio:
 
     def __init__(self,
                  name: str,
-                 takeover_button_pin: int = None,
-                 release_button_pin: int = None,
-                 immediate_button_pin: int = None,
-                 green_led: GPIO.Led = None,
-                 yellow_led: GPIO.Led = None,
-                 red_led: GPIO.Led = None
+                 takeover_button: BaseButton = None,
+                 release_button: BaseButton = None,
+                 immediate_button: BaseButton = None,
+                 green_led: BaseLamp = None,
+                 yellow_led: BaseLamp = None,
+                 red_led: BaseLamp = None
                  ):
         self._name = name
         if name in Studio.names.keys():
             raise ValueError('name already used %s' % name)
         Studio.names[name] = self
 
-        self._takeover_button_pin = None
-        self._release_button_pin = None
-        self._immediate_button_pin = None
+        self._takeover_button = None  # type: typing.Optional[BaseButton]
+        self._release_button = None  # type: typing.Optional[BaseButton]
+        self._immediate_button = None  # type: typing.Optional[BaseButton]
 
-        self.takeover_button_pin = takeover_button_pin
-        self.release_button_pin = release_button_pin
-        self.immediate_button_pin = immediate_button_pin
+        self.takeover_button = takeover_button
+        self.release_button = release_button
+        self.immediate_button = immediate_button
 
-        self._green_led = green_led if green_led else GPIO.DummyLed()
-        self._yellow_led = yellow_led if yellow_led else GPIO.DummyLed()
-        self._red_led = red_led if red_led else GPIO.DummyLed()
+        self._green_led = green_led if green_led else DummyLamp(name="Green dummy " + name)
+        self._yellow_led = yellow_led if yellow_led else DummyLamp(name="yellow dummy " + name)
+        self._red_led = red_led if red_led else DummyLamp(name="red dummy " + name)
 
         self.dispatcher_button_event_queue = None  # type: typing.Optional[asyncio.Queue]
 
     def __del__(self):
-        self.takeover_button_pin = None
-        self.release_button_pin = None
-        self.immediate_button_pin = None
+        self.takeover_button = None
+        self.release_button = None
+        self.immediate_button = None
 
     @property
     def name(self) -> str:
         return self._name
 
     @property
-    def takeover_button_pin(self) -> int:
-        return self._takeover_button_pin
+    def takeover_button(self) -> BaseButton:
+        return self._takeover_button
 
-    @takeover_button_pin.setter
-    def takeover_button_pin(self, new_pin: int):
-        if new_pin != self._takeover_button_pin:
+    @takeover_button.setter
+    def takeover_button(self, new_button: BaseButton):
+        if new_button == self._takeover_button:
             return
-        if self._takeover_button_pin is not None:
-            GPIO.remove_button(self._takeover_button_pin)
+        if self._takeover_button is not None:
+            self._takeover_button.remove_handler(self.__takeover_button_coroutine)
 
-        self._takeover_button_pin = new_pin
+        self._takeover_button = new_button
 
-        if new_pin is not None:
-            GPIO.register_button(new_pin, coroutine=self._gpio_button_coroutine)
+        if new_button is not None:
+            self._takeover_button.add_handler(self.__takeover_button_coroutine)
 
     @property
-    def release_button_pin(self) -> int:
-        return self._release_button_pin
+    def release_button(self) -> BaseButton:
+        return self._release_button
 
-    @release_button_pin.setter
-    def release_button_pin(self, new_pin: int):
-        if new_pin != self._release_button_pin:
+    @release_button.setter
+    def release_button(self, new_button: BaseButton):
+        if new_button == self._release_button:
             return
-        if self._release_button_pin is not None:
-            GPIO.remove_button(self._release_button_pin)
+        if self._release_button is not None:
+            self._release_button.remove_handler(self.__release_button_coroutine)
 
-        self._release_button_pin = new_pin
+        self._release_button = new_button
 
-        if new_pin is not None:
-            GPIO.register_button(new_pin, coroutine=self._gpio_button_coroutine)
+        if new_button is not None:
+            self._release_button.add_handler(self.__release_button_coroutine)
 
     @property
-    def immediate_button_pin(self) -> int:
-        return self._immediate_button_pin
+    def immediate_button(self) -> BaseButton:
+        return self._immediate_button
 
-    @immediate_button_pin.setter
-    def immediate_button_pin(self, new_pin: int):
-        if new_pin != self._immediate_button_pin:
+    @immediate_button.setter
+    def immediate_button(self, new_button: BaseButton):
+        if new_button == self._immediate_button:
             return
-        if self._immediate_button_pin is not None:
-            GPIO.remove_button(self._immediate_button_pin)
+        if self._immediate_button is not None:
+            self._immediate_button.remove_handler(self.__immediate_button_coroutine)
 
-        self._immediate_button_pin = new_pin
+        self._immediate_button = new_button
 
-        if new_pin is not None:
-            GPIO.register_button(new_pin, coroutine=self._gpio_button_coroutine)
+        if new_button is not None:
+            self._immediate_button.add_handler(self.__immediate_button_coroutine)
 
     @property
-    def green_led(self) -> GPIO.DummyLed:
+    def green_led(self) -> BaseLamp:
         return self._green_led
 
     @property
-    def yellow_led(self) -> GPIO.DummyLed:
+    def yellow_led(self) -> BaseLamp:
         return self._yellow_led
 
     @property
-    def red_led(self) -> GPIO.DummyLed:
+    def red_led(self) -> BaseLamp:
         return self._red_led
 
     @property
@@ -132,50 +132,43 @@ class Studio:
             'green':
                 {
                     'state': self.green_led.state.name,
-                    'blink_freq': self.green_led.blink_freq
+                    'blink_freq': self.green_led.state.frequency
                 },
             'yellow':
                 {
                     'state': self.yellow_led.state.name,
-                    'blink_freq': self.yellow_led.blink_freq
+                    'blink_freq': self.yellow_led.state.frequency
                 },
             'red':
                 {
                     'state': self.red_led.state.name,
-                    'blink_freq': self.red_led.blink_freq
+                    'blink_freq': self.red_led.state.frequency
                 },
         }
 
     @property
-    def led_status_typed(self) -> StudioLedStatus:
-        return StudioLedStatus(
-            green=LedStatus(state=self.green_led.state, blink_freq=self.green_led.blink_freq),
-            yellow=LedStatus(state=self.yellow_led.state, blink_freq=self.yellow_led.blink_freq),
-            red=LedStatus(state=self.red_led.state, blink_freq=self.red_led.blink_freq)
+    def led_status_typed(self) -> StudioLampStatus:
+        return StudioLampStatus(
+            green=self.green_led.state,
+            yellow=self.yellow_led.state,
+            red=self.red_led.state,
         )
 
     @led_status_typed.setter
-    def led_status_typed(self, studio_led_status: StudioLedStatus):
-        self.green_led.state = studio_led_status.green.state
-        self.green_led.blink_freq = studio_led_status.green.blink_freq
+    def led_status_typed(self, studio_led_status: StudioLampStatus):
+        self.green_led.state = studio_led_status.green
+        self.yellow_led.state = studio_led_status.yellow
+        self.red_led.state = studio_led_status.red
 
-        self.yellow_led.state = studio_led_status.yellow.state
-        self.yellow_led.blink_freq = studio_led_status.yellow.blink_freq
-
-        self.red_led.state = studio_led_status.red.state
-        self.red_led.blink_freq = studio_led_status.red.blink_freq
-
-    async def _gpio_button_coroutine(self, pin):
-        event = None
-        if pin == self._takeover_button_pin:
-            event = ButtonEvent(self, Button.takeover)
-        elif pin == self._release_button_pin:
-            event = ButtonEvent(self, Button.release)
-        elif pin == self._immediate_button_pin:
-            event = ButtonEvent(self, Button.immediate)
+    async def __button_coroutine(self, button):
+        event = ButtonEvent(self, button)
 
         if event and self.dispatcher_button_event_queue:
             await self.dispatcher_button_event_queue.put(event)
+
+    __takeover_button_coroutine = functools.partialmethod(__button_coroutine, Button.takeover)
+    __release_button_coroutine = functools.partialmethod(__button_coroutine, Button.release)
+    __immediate_button_coroutine = functools.partialmethod(__button_coroutine, Button.immediate)
 
     def __repr__(self):
         return '<Studio: name=%s>' % self.name
