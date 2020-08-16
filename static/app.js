@@ -11,7 +11,7 @@ if (location.protocol === 'https:') {
 }
 const status_ws_url = proto + location.host + '/api/v1/ws';
 
-let led_map = {};
+let lamp_map = {};
 
 let selected_studio = '';
 
@@ -24,12 +24,12 @@ const update_selected_studio = function (new_value) {
     console.log(selected_studio);
 };
 
-const update_led_status = function (payload) {
-    if (payload.studio in led_map) {
-        let led_entry = led_map[payload.studio];
+const update_lamp_status = function (payload) {
+    if (payload.studio in lamp_map) {
+        let lamp_entry = lamp_map[payload.studio];
         for (let color in payload.status) {
-            led_entry[color][0].dataset.state = payload.status[color].state.toLowerCase();
-            led_entry[color][0].style.animationDuration = (1 / payload.status[color].blink_freq) + 's';
+            lamp_entry[color][0].dataset.state = payload.status[color].state.toLowerCase();
+            lamp_entry[color][0].style.animationDuration = (1 / payload.status[color].blink_freq) + 's';
         }
     }
 };
@@ -92,25 +92,25 @@ $.get(
 $.get(
     '/api/v1/studio_lamp_names',
     function (data) {
-        const leds_table = $('#leds');
-        let row_template = $('tr', leds_table).clone();
-        leds_table.empty();
+        const lamp_table = $('#lamps');
+        let row_template = $('tr', lamp_table).clone();
+        lamp_table.empty();
 
         data.forEach(function (studio) {
-            let led_entry = {
+            let lamp_entry = {
                 'row': row_template.clone()
             };
             ['name', 'green', 'yellow', 'red'].forEach(function (key) {
-                led_entry[key] = $('#' + key, led_entry['row']);
-                led_entry[key].removeAttr('id');
+                lamp_entry[key] = $('#' + key, lamp_entry['row']);
+                lamp_entry[key].removeAttr('id');
             });
-            led_entry['name'].text(studio);
+            lamp_entry['name'].text(studio);
 
-            leds_table.append(led_entry['row']);
-            led_map[studio] = led_entry;
+            lamp_table.append(lamp_entry['row']);
+            lamp_map[studio] = lamp_entry;
 
             if (connection !== null && connection.readyState === WebSocket.OPEN) {
-                connection.send(JSON.stringify({type: 'studio.led.status', studio: studio}));
+                connection.send(JSON.stringify({type: 'studio.lamp.status', studio: studio}));
             }
         });
     }
@@ -149,9 +149,9 @@ function connection_start() {
                 dispatcher_status_elements.x.text(data.payload.x);
                 dispatcher_status_elements.y.text(data.payload.y);
                 break;
-            case 'studio.led.status':
+            case 'studio.lamp.status':
                 const payload = data.payload;
-                update_led_status(payload);
+                update_lamp_status(payload);
                 break;
             default:
                 console.log(data);

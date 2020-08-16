@@ -28,18 +28,18 @@ class BaseStudio:
 
     def __init__(self,
                  name: str,
-                 green_led: BaseLamp = None,
-                 yellow_led: BaseLamp = None,
-                 red_led: BaseLamp = None
+                 green_lamp: BaseLamp = None,
+                 yellow_lamp: BaseLamp = None,
+                 red_lamp: BaseLamp = None
                  ):
         self._name = name
         if name in BaseStudio.names.keys():
             raise ValueError('name already used %s' % name)
         Studio.names[name] = self
 
-        self._green_led = green_led if green_led else DummyLamp(name="green dummy " + name)
-        self._yellow_led = yellow_led if yellow_led else DummyLamp(name="yellow dummy " + name)
-        self._red_led = red_led if red_led else DummyLamp(name="red dummy " + name)
+        self._green_lamp = green_lamp if green_lamp else DummyLamp(name="green dummy " + name)
+        self._yellow_lamp = yellow_lamp if yellow_lamp else DummyLamp(name="yellow dummy " + name)
+        self._red_lamp = red_lamp if red_lamp else DummyLamp(name="red dummy " + name)
 
         self.dispatcher_button_event_queue = None  # type: typing.Optional[asyncio.Queue]
 
@@ -48,56 +48,56 @@ class BaseStudio:
         return self._name
 
     @property
-    def green_led(self) -> BaseLamp:
-        return self._green_led
+    def green_lamp(self) -> BaseLamp:
+        return self._green_lamp
 
     @property
-    def yellow_led(self) -> BaseLamp:
-        return self._yellow_led
+    def yellow_lamp(self) -> BaseLamp:
+        return self._yellow_lamp
 
     @property
-    def red_led(self) -> BaseLamp:
-        return self._red_led
+    def red_lamp(self) -> BaseLamp:
+        return self._red_lamp
 
     @property
-    def led_status(self) -> typing.Dict[str, typing.Dict[str, typing.Union[str, int]]]:
+    def lamp_status(self) -> typing.Dict[str, typing.Dict[str, typing.Union[str, int]]]:
         return {
             'green':
                 {
-                    'state': self.green_led.state.name,
-                    'blink_freq': self.green_led.state.frequency
+                    'state': self.green_lamp.state.name,
+                    'blink_freq': self.green_lamp.state.frequency
                 },
             'yellow':
                 {
-                    'state': self.yellow_led.state.name,
-                    'blink_freq': self.yellow_led.state.frequency
+                    'state': self.yellow_lamp.state.name,
+                    'blink_freq': self.yellow_lamp.state.frequency
                 },
             'red':
                 {
-                    'state': self.red_led.state.name,
-                    'blink_freq': self.red_led.state.frequency
+                    'state': self.red_lamp.state.name,
+                    'blink_freq': self.red_lamp.state.frequency
                 },
         }
 
     @property
-    def led_status_typed(self) -> StudioLampStatus:
+    def lamp_status_typed(self) -> StudioLampStatus:
         return StudioLampStatus(
-            green=self.green_led.state,
-            yellow=self.yellow_led.state,
-            red=self.red_led.state,
+            green=self.green_lamp.state,
+            yellow=self.yellow_lamp.state,
+            red=self.red_lamp.state,
         )
 
-    @led_status_typed.setter
-    def led_status_typed(self, studio_led_status: StudioLampStatus):
-        self.green_led.state = studio_led_status.green
-        self.yellow_led.state = studio_led_status.yellow
-        self.red_led.state = studio_led_status.red
+    @lamp_status_typed.setter
+    def lamp_status_typed(self, studio_lamp_status: StudioLampStatus):
+        self.green_lamp.state = studio_lamp_status.green
+        self.yellow_lamp.state = studio_lamp_status.yellow
+        self.red_lamp.state = studio_lamp_status.red
 
 
 class Automat(BaseStudio):
 
-    def __init__(self, green_led: BaseLamp = None, yellow_led: BaseLamp = None, red_led: BaseLamp = None):
-        super().__init__('Automat', green_led, yellow_led, red_led)
+    def __init__(self, green_lamp: BaseLamp = None, yellow_lamp: BaseLamp = None, red_lamp: BaseLamp = None):
+        super().__init__('Automat', green_lamp, yellow_lamp, red_lamp)
 
 
 class Studio(BaseStudio):
@@ -106,11 +106,11 @@ class Studio(BaseStudio):
                  takeover_button: BaseButton = None,
                  release_button: BaseButton = None,
                  immediate_button: BaseButton = None,
-                 green_led: BaseLamp = None,
-                 yellow_led: BaseLamp = None,
-                 red_led: BaseLamp = None
+                 green_lamp: BaseLamp = None,
+                 yellow_lamp: BaseLamp = None,
+                 red_lamp: BaseLamp = None
                  ):
-        super(Studio, self).__init__(name=name, green_led=green_led, yellow_led=yellow_led, red_led=red_led)
+        super(Studio, self).__init__(name=name, green_lamp=green_lamp, yellow_lamp=yellow_lamp, red_lamp=red_lamp)
         self._takeover_button = None  # type: typing.Optional[BaseButton]
         self._release_button = None  # type: typing.Optional[BaseButton]
         self._immediate_button = None  # type: typing.Optional[BaseButton]

@@ -12,7 +12,7 @@ from transitions import EventData, MachineError
 import bermudafunk.SymNet
 from bermudafunk import base
 from bermudafunk.dispatcher.data_types import BaseStudio, Button, DispatcherStudioDefinition, Studio
-from bermudafunk.dispatcher.transitions import LampAwareMachine as Machine, States, transitions
+from bermudafunk.dispatcher.transitions import LampAwareMachine as Machine, States, transitions, LampStateTarget
 from bermudafunk.dispatcher.utils import calc_next_hour
 
 logger = logging.getLogger(__name__)
@@ -151,7 +151,7 @@ class Dispatcher:
             send_event=True,
             before_state_change=[self._before_state_change],
             after_state_change=[self._after_state_change],
-            finalize_event=[self._audit_state, self._assure_led_status, self._notify_machine_observers]
+            finalize_event=[self._audit_state, self._assure_lamp_status, self._notify_machine_observers]
         )
 
         # Add the transitions between the states to the machine
@@ -311,21 +311,21 @@ class Dispatcher:
                     pass
 
             self._audit_state()
-            self._assure_led_status()
+            self._assure_lamp_status()
 
-    def _assure_led_status(self, _: EventData = None):
-        """Set the led state in studios"""
-        logger.debug('assure led status')
-        new_led_state = self._machine.get_state(self._machine.state).led_state_target  # type: LampStateTarget
-        self._automat.studio.led_status_typed = new_led_state.automat
+    def _assure_lamp_status(self, _: EventData = None):
+        """Set the lamp state in studios"""
+        logger.debug('assure lamp status')
+        new_lamp_state = self._machine.get_state(self._machine.state).lamp_state_target  # type: LampStateTarget
+        self._automat.studio.lamp_status_typed = new_lamp_state.automat
         for studio in self._studios:
             if studio == self._x:
-                logger.debug(new_led_state.x)
-                studio.led_status_typed = new_led_state.x
+                logger.debug(new_lamp_state.x)
+                studio.lamp_status_typed = new_lamp_state.x
             elif studio == self._y:
-                studio.led_status_typed = new_led_state.y
+                studio.lamp_status_typed = new_lamp_state.y
             else:
-                studio.led_status_typed = new_led_state.other
+                studio.lamp_status_typed = new_lamp_state.other
 
     def _audit_state(self, _: EventData = None):
         """Assure the required studios and only these are set"""
@@ -391,7 +391,7 @@ class Dispatcher:
             except MachineError as e:
                 logger.critical(e)
 
-            self._assure_led_status()
+            self._assure_lamp_status()
         finally:
             self._next_hour_timer = None
 

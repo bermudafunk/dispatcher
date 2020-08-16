@@ -17,26 +17,26 @@ if __name__ == '__main__':
     main_selector = device.define_selector(1, 8)
 
     automat = Automat(
-        green_led=PixtendLamp(name='Automat Green', channel=0, pixtend=pixtend),
-        yellow_led=PixtendLamp(name='Automat Yellow', channel=1, pixtend=pixtend),
+        green_lamp=PixtendLamp(name='Automat Green', channel=0, pixtend=pixtend),
+        yellow_lamp=PixtendLamp(name='Automat Yellow', channel=1, pixtend=pixtend),
     )
 
     af_1 = Studio(
         name='AlteFeuerwache1',
-        green_led=PixtendLamp(name='AF1 Green', channel=2, pixtend=pixtend),
-        yellow_led=PixtendLamp(name='AF1 Yellow', channel=3, pixtend=pixtend),
-        red_led=PixtendLamp(name='AF1 RED', channel=8, pixtend=pixtend),
+        green_lamp=PixtendLamp(name='AF1 Green', channel=2, pixtend=pixtend),
+        yellow_lamp=PixtendLamp(name='AF1 Yellow', channel=3, pixtend=pixtend),
+        red_lamp=PixtendLamp(name='AF1 RED', channel=8, pixtend=pixtend),
     )
     af_2 = Studio(
         name='AlteFeuerwache2',
-        green_led=PixtendLamp(name='AF2 Green', channel=4, pixtend=pixtend),
-        yellow_led=PixtendLamp(name='AF2 Yellow', channel=5, pixtend=pixtend),
-        red_led=PixtendLamp(name='AF2 RED', channel=9, pixtend=pixtend),
+        green_lamp=PixtendLamp(name='AF2 Green', channel=4, pixtend=pixtend),
+        yellow_lamp=PixtendLamp(name='AF2 Yellow', channel=5, pixtend=pixtend),
+        red_lamp=PixtendLamp(name='AF2 RED', channel=9, pixtend=pixtend),
     )
     af_3 = Studio(
         name='Aussenstelle',
-        green_led=PixtendLamp(name='AF2 Green', channel=6, pixtend=pixtend),
-        yellow_led=PixtendLamp(name='AF2 Yellow', channel=7, pixtend=pixtend),
+        green_lamp=PixtendLamp(name='AF2 Green', channel=6, pixtend=pixtend),
+        yellow_lamp=PixtendLamp(name='AF2 Yellow', channel=7, pixtend=pixtend),
     )
 
     dispatcher = Dispatcher(

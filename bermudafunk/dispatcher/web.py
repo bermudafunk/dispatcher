@@ -72,11 +72,11 @@ async def run(dispatcher: Dispatcher):
 
         return web.json_response({'status': 'emitted_button_event'})
 
-    @routes.get('/api/v1/{studio_name}/leds')
-    async def led_status(request: web.Request) -> web.StreamResponse:
+    @routes.get('/api/v1/{studio_name}/lamps')
+    async def lamp_status(request: web.Request) -> web.StreamResponse:
         studio = BaseStudio.names[request.match_info['studio_name']]
 
-        return web.json_response(studio.led_status)
+        return web.json_response(studio.lamp_status)
 
     @routes.get('/api/v1/ws')
     async def websocket_status(request: web.Request) -> web.StreamResponse:
@@ -86,7 +86,7 @@ async def run(dispatcher: Dispatcher):
         _websockets.add(ws)
         await ws.send_str(dispatcher_status_msg())
         for studio in dispatcher.studios_with_automat:
-            await ws.send_str(led_status_msg(studio))
+            await ws.send_str(lamp_status_msg(studio))
 
         try:
             async for msg in ws:
@@ -101,8 +101,8 @@ async def run(dispatcher: Dispatcher):
                             logger.debug(req)
                             if req['type'] == 'dispatcher.status':
                                 await ws.send_str(dispatcher_status_msg())
-                            elif req['type'] == 'studio.led.status':
-                                await ws.send_str(led_status_msg(BaseStudio.names[req['studio']]))
+                            elif req['type'] == 'studio.lamp.status':
+                                await ws.send_str(lamp_status_msg(BaseStudio.names[req['studio']]))
                         except json.JSONDecodeError as e:
                             await ws.send_str(json.dumps({'kind': 'error', 'exception': str(e)}))
                         except TypeError as e:
@@ -131,15 +131,15 @@ async def run(dispatcher: Dispatcher):
             for ws in _websockets:
                 await ws.send_str(dispatcher_status_msg())
                 for studio in dispatcher.studios_with_automat:
-                    await ws.send_str(led_status_msg(studio))
+                    await ws.send_str(lamp_status_msg(studio))
 
             observer_event.clear()
 
     def dispatcher_status_msg():
         return json.dumps({'kind': 'dispatcher.status', 'payload': dispatcher.status})
 
-    def led_status_msg(studio: BaseStudio):
-        return json.dumps({'kind': 'studio.led.status', 'payload': {'studio': studio.name, 'status': studio.led_status}})
+    def lamp_status_msg(studio: BaseStudio):
+        return json.dumps({'kind': 'studio.lamp.status', 'payload': {'studio': studio.name, 'status': studio.lamp_status}})
 
     app.add_routes(routes)
 

@@ -22,13 +22,13 @@ LampStateTarget = typing.NamedTuple(
 
 
 class LampAwareState(State):
-    def __init__(self, name, led_state_target: LampStateTarget, on_enter=None, on_exit=None, ignore_invalid_triggers=False):
+    def __init__(self, name, lamp_state_target: LampStateTarget, on_enter=None, on_exit=None, ignore_invalid_triggers=False):
         super().__init__(name, on_enter, on_exit, ignore_invalid_triggers)
-        self._led_state_target = led_state_target
+        self._lamp_state_target = lamp_state_target
 
     @property
-    def led_state_target(self) -> LampStateTarget:
-        return self._led_state_target
+    def lamp_state_target(self) -> LampStateTarget:
+        return self._lamp_state_target
 
 
 class LampAwareMachine(Machine):
