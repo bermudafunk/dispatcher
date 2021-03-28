@@ -140,13 +140,13 @@ class Dispatcher:
         self.__y = None
         self._y = None  # type: typing.Optional[Studio]
 
-        States.AUTOMAT_ON_AIR.add_callback('enter', self._change_to_automat)
-        States.STUDIO_X_ON_AIR.add_callback('enter', self._change_to_studio)
+        States.AUTOMAT_ON_AIR.value.add_callback('enter', self._change_to_automat)
+        States.STUDIO_X_ON_AIR.value.add_callback('enter', self._change_to_studio)
 
         # Initialize the underlying transitions machine
         self._machine = Machine(
-            states=States,
-            initial=States.AUTOMAT_ON_AIR,
+            states=[state.value for state in States],
+            initial=States.AUTOMAT_ON_AIR.value,
             ignore_invalid_triggers=True,
             send_event=True,
             before_state_change=[self._before_state_change],
