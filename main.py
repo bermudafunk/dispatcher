@@ -1,49 +1,59 @@
-import bermudafunk.dispatcher
-from bermudafunk import base, GPIO
-from bermudafunk.SymNet import SymNetDevice, SymNetSelectorControllerDummy
+from bermudafunk import base
+from bermudafunk.SymNet import SymNetDevice
 from bermudafunk.dispatcher import web
+from bermudafunk.dispatcher.data_types import DispatcherStudioDefinition, Studio, Automat
+from bermudafunk.dispatcher.dispatcher import Dispatcher
+from bermudafunk.io.pixtend import PixtendLamp, Pixtend
 
 if __name__ == '__main__':
     base.logger.debug('Main Start')
 
-    # device = SymNetDevice(local_address=(base.config.myIp, base.config.myPort),
-    #                       remote_address=(base.config.remoteIp, base.config.remotePort))
-    #
-    # main_selector = device.define_selector(1, 8)
-    main_selector = SymNetSelectorControllerDummy(1, 8)
+    pixtend = Pixtend()
+    base.cleanup_tasks.append(base.loop.create_task(pixtend.cleanup_aware_shutdown()))
 
-    af_1 = bermudafunk.dispatcher.Studio(
+    device = SymNetDevice(local_address=(base.config.myIp, base.config.myPort),
+                          remote_address=(base.config.remoteIp, base.config.remotePort))
+
+    main_selector = device.define_selector(1, 8)
+
+    automat = Automat(
+        green_lamp=PixtendLamp(name='Automat Green', channel=0, pixtend=pixtend),
+        yellow_lamp=PixtendLamp(name='Automat Yellow', channel=1, pixtend=pixtend),
+    )
+
+    af_1 = Studio(
         name='AlteFeuerwache1',
-        takeover_button_pin=35,
-        release_button_pin=33,
-        immediate_button_pin=37,
-        green_led=GPIO.Led(7),
-        yellow_led=GPIO.Led(11),
-        red_led=GPIO.Led(29),
+        green_lamp=PixtendLamp(name='AF1 Green', channel=2, pixtend=pixtend),
+        yellow_lamp=PixtendLamp(name='AF1 Yellow', channel=3, pixtend=pixtend),
+        red_lamp=PixtendLamp(name='AF1 RED', channel=8, pixtend=pixtend),
     )
-    af_2 = bermudafunk.dispatcher.Studio(
+    af_2 = Studio(
         name='AlteFeuerwache2',
-        takeover_button_pin=38,
-        release_button_pin=36,
-        immediate_button_pin=40,
-        green_led=GPIO.Led(13),
-        yellow_led=GPIO.Led(15),
-        red_led=GPIO.Led(31),
+        green_lamp=PixtendLamp(name='AF2 Green', channel=4, pixtend=pixtend),
+        yellow_lamp=PixtendLamp(name='AF2 Yellow', channel=5, pixtend=pixtend),
+        red_lamp=PixtendLamp(name='AF2 RED', channel=9, pixtend=pixtend),
     )
-    af_3 = bermudafunk.dispatcher.Studio('Volksbad')
+    af_3 = Studio(
+        name='Aussenstelle',
+        green_lamp=PixtendLamp(name='AF2 Green', channel=6, pixtend=pixtend),
+        yellow_lamp=PixtendLamp(name='AF2 Yellow', channel=7, pixtend=pixtend),
+    )
 
-    dispatcher = bermudafunk.dispatcher.Dispatcher(
+    dispatcher = Dispatcher(
         symnet_controller=main_selector,
-        automat_selector_value=1,
-        studios=[
-            bermudafunk.dispatcher.DispatcherStudioDefinition(studio=af_1, selector_value=2),
-            bermudafunk.dispatcher.DispatcherStudioDefinition(studio=af_2, selector_value=3),
-            bermudafunk.dispatcher.DispatcherStudioDefinition(studio=af_3, selector_value=4),
-        ]
+        automat=DispatcherStudioDefinition(
+            studio=automat,
+            selector_value=1
+        ),
+        dispatcher_studios=[
+            DispatcherStudioDefinition(studio=af_1, selector_value=2),
+            DispatcherStudioDefinition(studio=af_2, selector_value=3),
+            DispatcherStudioDefinition(studio=af_3, selector_value=4),
+        ],
     )
     dispatcher.load()
     dispatcher.start()
 
-    bermudafunk.base.cleanup_tasks.append(bermudafunk.base.loop.create_task(web.run(dispatcher)))
+    base.cleanup_tasks.append(base.loop.create_task(web.run(dispatcher)))
 
     base.run_loop()

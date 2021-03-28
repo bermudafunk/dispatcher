@@ -2,7 +2,7 @@ body {
     padding: 1rem 0;
 }
 
-$led-color-map: (
+$lamp-color-map: (
     green: (
         off: #dfd,
         on: #0b0,
@@ -17,25 +17,25 @@ $led-color-map: (
     )
 );
 
-$led-size: 2.5rem;
+$lamp-size: 2.5rem;
 
 $smooth-factor: 10;
 
 $blink-default-freq: 2;
 
-.led {
-    width: $led-size;
-    height: $led-size;
+.lamp {
+    width: $lamp-size;
+    height: $lamp-size;
     border: 2px black solid;
     margin: 0 auto;
 }
 
-@each $led-color in map-keys($led-color-map) {
-    $color-settings: map-get($led-color-map, $led-color);
+@each $lamp-color in map-keys($lamp-color-map) {
+    $color-settings: map-get($lamp-color-map, $lamp-color);
     $off-color: map-get($color-settings, off);
     $on-color: map-get($color-settings, on);
 
-    @keyframes blink-#{$led-color} {
+    @keyframes blink-#{$lamp-color} {
         0% {
             background-color: $off-color;
         }
@@ -50,18 +50,18 @@ $blink-default-freq: 2;
         }
     }
 
-    .led {
-        &.#{$led-color} {
-            &[data-state='off'] {
+    .lamp {
+        &.#{$lamp-color} {
+            &[data-state^='off'] {
                 background-color: $off-color;
             }
 
-            &[data-state='on'] {
+            &[data-state^='on'] {
                 background-color: $on-color;
             }
 
-            &[data-state='blink'] {
-                animation-name: blink-#{$led-color};
+            &[data-state^='blink'] {
+                animation-name: blink-#{$lamp-color};
                 animation-duration: #{(1/$blink-default-freq)}s;
                 animation-iteration-count: infinite;
                 animation-direction: alternate;

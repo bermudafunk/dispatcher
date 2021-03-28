@@ -1,7 +1,7 @@
 body {
   padding: 1rem 0; }
 
-.led {
+.lamp {
   width: 2.5rem;
   height: 2.5rem;
   border: 2px black solid;
@@ -16,11 +16,11 @@ body {
     background-color: #0b0; }
   100% {
     background-color: #0b0; } }
-.led.green[data-state='off'] {
+.lamp.green[data-state^='off'] {
   background-color: #dfd; }
-.led.green[data-state='on'] {
+.lamp.green[data-state^='on'] {
   background-color: #0b0; }
-.led.green[data-state='blink'] {
+.lamp.green[data-state^='blink'] {
   animation-name: blink-green;
   animation-duration: 0.5s;
   animation-iteration-count: infinite;
@@ -36,11 +36,11 @@ body {
     background-color: #fc0; }
   100% {
     background-color: #fc0; } }
-.led.yellow[data-state='off'] {
+.lamp.yellow[data-state^='off'] {
   background-color: #ffa; }
-.led.yellow[data-state='on'] {
+.lamp.yellow[data-state^='on'] {
   background-color: #fc0; }
-.led.yellow[data-state='blink'] {
+.lamp.yellow[data-state^='blink'] {
   animation-name: blink-yellow;
   animation-duration: 0.5s;
   animation-iteration-count: infinite;
@@ -56,11 +56,11 @@ body {
     background-color: #f00; }
   100% {
     background-color: #f00; } }
-.led.red[data-state='off'] {
+.lamp.red[data-state^='off'] {
   background-color: #fee; }
-.led.red[data-state='on'] {
+.lamp.red[data-state^='on'] {
   background-color: #f00; }
-.led.red[data-state='blink'] {
+.lamp.red[data-state^='blink'] {
   animation-name: blink-red;
   animation-duration: 0.5s;
   animation-iteration-count: infinite;
