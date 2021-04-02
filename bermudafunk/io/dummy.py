@@ -2,7 +2,7 @@ import functools
 import logging
 import typing
 
-from . import common
+from bermudafunk.io import common
 
 logger = logging.getLogger(__name__)
 
@@ -18,20 +18,32 @@ class DummyButton(common.BaseButton):
 
 
 class DummyLamp(common.BaseLamp):
-    def __init__(self, name: str):
+    def __init__(self, name: str, state: common.LampState = common.LampState.OFF):
         super().__init__(
-            name,
-            on_callable=functools.partial(logger.debug, 'Dummy Lamp {} ON'.format(name)),
-            off_callable=functools.partial(logger.debug, 'Dummy Lamp {} OFF'.format(name))
+            name=name,
+            on_callable=functools.partial(logger.debug, 'Dummy Lamp <{}> ON'.format(name)),
+            off_callable=functools.partial(logger.debug, 'Dummy Lamp <{}> OFF'.format(name)),
+            state=state,
         )
 
 
 class DummyTriStateLamp(common.BaseTriColorLamp):
-    def __init__(self, name: str, initial_color: common.TriColorLampColors = common.TriColorLampColors.GREEN):
-        super().__init__(name, self._on_callable, self._off_callable, initial_color)
+    def __init__(
+        self,
+        name: str,
+        state: common.LampState = common.LampState.OFF,
+        color: common.TriColorLampColors = common.TriColorLampColors.GREEN,
+    ):
+        super().__init__(
+            name=name,
+            on_callable=self._on_callable,
+            off_callable=self._off_callable,
+            state=state,
+            color=color,
+        )
 
     def _on_callable(self):
-        logger.debug('Dummy Lamp %s with color %s ON', self.name, self.color)
+        logger.debug('Dummy Lamp <%s> with color <%s> ON', self.name, self.color)
 
     def _off_callable(self):
-        logger.debug('Dummy Lamp %s with color %s OFF', self.name, self.color)
+        logger.debug('Dummy Lamp <%s> with color <%s> OFF', self.name, self.color)

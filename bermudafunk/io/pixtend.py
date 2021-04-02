@@ -15,7 +15,7 @@ import prometheus_client
 import spidev
 
 from bermudafunk.base import loop, cleanup_event
-from bermudafunk.io.common import LampState, BaseButton, BaseLamp
+from bermudafunk.io.common import LampState, BaseButton, BaseLamp, BaseTriColorLamp, TriColorLampColors
 from bermudafunk.io.gpio import GPIOLamp as GPIOOutput
 
 logger = logging.getLogger(__name__)
@@ -553,13 +553,56 @@ class PixtendButton(BaseButton):
 
 
 class PixtendLamp(BaseLamp):
-    def __init__(self, name: str, pixtend: Pixtend, channel: int):
+    def __init__(self, name: str, pixtend: Pixtend, channel: int, state: LampState = LampState.OFF):
         self._pixtend = pixtend
         self._channel = channel
-        BaseLamp.__init__(
-            self,
+        super().__init__(
             name,
             on_callable=functools.partial(self._pixtend.digital_out, self._channel, True),
-            off_callable=functools.partial(self._pixtend.digital_out, self._channel, False)
+            off_callable=functools.partial(self._pixtend.digital_out, self._channel, False),
+            state=state,
         )
-        self.state = LampState.OFF
+
+
+class PixtendTriColorLamp(BaseTriColorLamp):
+    def __init__(
+        self,
+        name: str,
+        pixtend: Pixtend,
+        channel_1: int,
+        channel_2: int,
+        state: LampState = LampState.OFF,
+        color: TriColorLampColors = TriColorLampColors.GREEN,
+    ):
+        self._pixtend = pixtend
+        self._channel_1 = int(channel_1)
+        self._channel_2 = int(channel_2)
+        if self._channel_1 == self._channel_2:
+            raise ValueError("Channel 1 must differ from channel 2 and vice versa")
+        super().__init__(
+            name=name,
+            on_callable=self._on_callable,
+            off_callable=self._off_callable,
+            state=state,
+            color=color,
+        )
+
+    def _on_callable(self):
+        with self._pixtend.transfer_lock:
+            self._pixtend.digital_out(self._channel_1, bool(TriColorLampColors.GREEN & self._color))
+            self._pixtend.digital_out(self._channel_2, bool(TriColorLampColors.RED & self._color))
+
+    def _off_callable(self):
+        with self._pixtend.transfer_lock:
+            self._pixtend.digital_out(self._channel_1, False)
+            self._pixtend.digital_out(self._channel_2, False)
+
+    def __repr__(self) -> str:
+        return '{}(pixtend={!r}, channel_1={!r}, channel_2={!r}, state={!r}, color={!r})'.format(
+            type(self).__name__,
+            self._pixtend,
+            self._channel_1,
+            self._channel_2,
+            self._state,
+            self._color,
+        )

@@ -44,9 +44,20 @@ class BaseButton(abc.ABC):
             else:
                 trigger()
 
+    def __repr__(self) -> str:
+        return '{}(name={!r})'.format(
+            type(self).__name__,
+            self._name,
+        )
+
 
 @enum.unique
 class LampState(enum.Enum):
+    OFF = 0
+    ON = 0
+    BLINK = 2
+    BLINK_FAST = 4
+
     def __new__(cls, frequency: float):
         value = len(cls.__members__) + 1
         obj = object.__new__(cls)
@@ -58,22 +69,30 @@ class LampState(enum.Enum):
     def frequency(self) -> float:
         return self._frequency
 
-    OFF = 0
-    ON = 0
-    BLINK = 2
-    BLINK_FAST = 4
+    def __repr__(self):
+        return '{}.{}'.format(type(self).__name__, self.name)
 
 
 class BaseLamp(abc.ABC):
-    def __init__(self, name: str, on_callable: typing.Callable, off_callable: typing.Callable):
+    def __init__(
+        self,
+        name: str,
+        on_callable: typing.Callable,
+        off_callable: typing.Callable,
+        state: LampState,
+    ):
         self._name = name
 
-        self._state = LampState.OFF  # type: LampState
+        if not isinstance(state, LampState):
+            raise ValueError("This supports only values of {}".format(LampState))
+        self._state = state
         self._lock = threading.RLock()
         self._blinker = None  # type: typing.Optional[Blinker]
 
         self._on_callable = on_callable
         self._off_callable = off_callable
+
+        self._assure_state()
 
     @property
     def name(self) -> str:
@@ -99,7 +118,7 @@ class BaseLamp(abc.ABC):
                 self._blinker = Blinker(
                     name="Blinker thread of lamp {}".format(self.name),
                     frequency=self._state.frequency,
-                    output_caller=[self._on_callable, self._off_callable]
+                    output_caller=[self._on_callable, self._off_callable],
                 )
                 self._blinker.start()
             else:
@@ -115,20 +134,40 @@ class BaseLamp(abc.ABC):
             else:
                 raise ValueError("Unknown lamp state with frequency 0")
 
+    def __repr__(self) -> str:
+        return '{}(name={!r}, state={!r})'.format(
+            type(self).__name__,
+            self._name,
+            self._state,
+        )
+
 
 @enum.unique
-class TriColorLampColors(enum.Enum):
+class TriColorLampColors(enum.Flag):
     GREEN = enum.auto()
     RED = enum.auto()
-    YELLOW = enum.auto()
+    YELLOW = GREEN | RED
+
+    def __repr__(self):
+        return '{}.{}'.format(type(self).__name__, self.name)
 
 
 class BaseTriColorLamp(BaseLamp):
-
-    def __init__(self, name: str, on_callable: typing.Callable, off_callable: typing.Callable,
-                 initial_color: TriColorLampColors = TriColorLampColors.GREEN):
-        super().__init__(name, on_callable, off_callable)
-        self._color = initial_color
+    def __init__(
+        self,
+        name: str,
+        on_callable: typing.Callable,
+        off_callable: typing.Callable,
+        state: LampState,
+        color: TriColorLampColors,
+    ):
+        self._color = color
+        super().__init__(
+            name=name,
+            on_callable=on_callable,
+            off_callable=off_callable,
+            state=state,
+        )
 
     @property
     def color(self) -> TriColorLampColors:
@@ -143,6 +182,14 @@ class BaseTriColorLamp(BaseLamp):
             if self._color is not new_color:
                 self._color = new_color
                 self._assure_state()
+
+    def __repr__(self) -> str:
+        return '{}(name={!r}, state={!r}, color={!r})'.format(
+            type(self).__name__,
+            self._name,
+            self._state,
+            self._color,
+        )
 
 
 class Blinker(threading.Thread):
