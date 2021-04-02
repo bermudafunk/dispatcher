@@ -4,14 +4,15 @@ import collections.abc
 import enum
 import inspect
 import itertools
+import logging
 import threading
 import time
 import typing
-import logging
 
 from bermudafunk.base import loop
 
 logger = logging.getLogger(__name__)
+
 
 class BaseButton(abc.ABC):
     def __init__(self, name: str):
@@ -89,28 +90,59 @@ class BaseLamp(abc.ABC):
             raise ValueError("This supports only values of {}".format(type(LampState)))
         with self._lock:
             if self._state is not new_state:
-                if new_state.frequency > 0:
-                    if self._blinker is None:
-                        self._blinker = Blinker(
-                            name="Blinker thread of lamp {}".format(self.name),
-                            frequency=new_state.frequency,
-                            output_caller=[self._on_callable, self._off_callable]
-                        )
-                        self._blinker.start()
-                    else:
-                        self._blinker.frequency = new_state.frequency
-                else:
-                    if self._blinker is not None:
-                        self._blinker.stop()
-                        self._blinker = None
-                    if new_state is LampState.OFF:
-                        self._off_callable()
-                    elif new_state is LampState.ON:
-                        self._on_callable()
-                    else:
-                        raise ValueError("Unknown lamp state with frequency 0")
-
                 self._state = new_state
+                self._assure_state()
+
+    def _assure_state(self):
+        if self._state.frequency > 0:
+            if self._blinker is None:
+                self._blinker = Blinker(
+                    name="Blinker thread of lamp {}".format(self.name),
+                    frequency=self._state.frequency,
+                    output_caller=[self._on_callable, self._off_callable]
+                )
+                self._blinker.start()
+            else:
+                self._blinker.frequency = self._state.frequency
+        else:
+            if self._blinker is not None:
+                self._blinker.stop()
+                self._blinker = None
+            if self._state is LampState.OFF:
+                self._off_callable()
+            elif self._state is LampState.ON:
+                self._on_callable()
+            else:
+                raise ValueError("Unknown lamp state with frequency 0")
+
+
+@enum.unique
+class TriColorLampColors(enum.Enum):
+    GREEN = enum.auto()
+    RED = enum.auto()
+    YELLOW = enum.auto()
+
+
+class BaseTriColorLamp(BaseLamp):
+
+    def __init__(self, name: str, on_callable: typing.Callable, off_callable: typing.Callable,
+                 initial_color: TriColorLampColors = TriColorLampColors.GREEN):
+        super().__init__(name, on_callable, off_callable)
+        self._color = initial_color
+
+    @property
+    def color(self) -> TriColorLampColors:
+        return self._color
+
+    @color.setter
+    def color(self, new_color: TriColorLampColors):
+        logger.debug('Lamp with name <{}> set color <{}>'.format(self.name, new_color))
+        if not isinstance(new_color, TriColorLampColors):
+            raise ValueError("This supports only values of {}".format(type(TriColorLampColors)))
+        with self._lock:
+            if self._color is not new_color:
+                self._color = new_color
+                self._assure_state()
 
 
 class Blinker(threading.Thread):
