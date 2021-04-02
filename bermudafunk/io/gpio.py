@@ -3,7 +3,7 @@ import logging
 
 import RPi.GPIO
 
-from . import common
+from bermudafunk.io import common
 
 logger = logging.getLogger(__name__)
 
@@ -12,14 +12,14 @@ class GPIO:
     _used_pins = set()
     _initialized = False
 
-    def __init__(self, pin: int, direction, initial=-1, pull_up_down=RPi.GPIO.PUD_OFF):
+    def __init__(self, pin: int, direction, initial=None, pull_up_down=RPi.GPIO.PUD_OFF):
         if pin in GPIO._used_pins:
             raise ValueError("The pin {} was already used".format(pin))
 
         if direction not in (RPi.GPIO.IN, RPi.GPIO.OUT):
             raise ValueError("Direction has to be one of RPi.GPIO.IN or RPi.GPIO.OUT, given {}".format(direction))
 
-        if direction is not RPi.GPIO.OUT and initial != -1:
+        if direction is not RPi.GPIO.OUT and initial is not None:
             raise ValueError("initial is only supported on direction RPi.GPIO.OUT")
         if direction is RPi.GPIO.OUT and initial not in (None, RPi.GPIO.LOW, RPi.GPIO.HIGH):
             raise ValueError("initial has to be one of RPi.GPIO.LOW, RPi.GPIO.HIGH or None, given {}", initial)
@@ -51,13 +51,24 @@ class GPIO:
     def __del__(self):
         RPi.GPIO.cleanup(self._pin)
 
+    def __repr__(self) -> str:
+        return '{}(pin={!r}, direction={!r}, initial={!r}, pull_up_down={!r})'.format(
+            type(self).__name__,
+            self._pin,
+            self._direction,
+            self._initial,
+            self._pull_up_down,
+        )
+
 
 class GPIOButton(common.BaseButton, GPIO):
     DEBOUNCE_TIME = 150  # in ms
 
     def __init__(self, name: str, pin: int, pull_up_down=RPi.GPIO.PUD_UP, internal_pull=False):
+        self._internal_pull = bool(internal_pull)
+
+        GPIO.__init__(self, pin, direction=RPi.GPIO.IN, pull_up_down=(pull_up_down if self._internal_pull else RPi.GPIO.PUD_OFF))
         common.BaseButton.__init__(self, name)
-        GPIO.__init__(self, pin, direction=RPi.GPIO.IN, pull_up_down=(pull_up_down if internal_pull else RPi.GPIO.PUD_OFF))
 
         if pull_up_down not in (RPi.GPIO.PUD_UP, RPi.GPIO.PUD_DOWN):
             raise ValueError("Button only support PUD_UP or PUD_DOWN")
@@ -77,6 +88,15 @@ class GPIOButton(common.BaseButton, GPIO):
         RPi.GPIO.remove_event_detect(self.pin)
         super().__del__()
 
+    def __repr__(self) -> str:
+        return '{}(name={!r}, pin={!r}, pull_up_down={!r}, internal_pull={!r})'.format(
+            type(self).__name__,
+            self._name,
+            self._pin,
+            self._pull_up_down,
+            self._internal_pull,
+        )
+
 
 class GPIOLamp(common.BaseLamp, GPIO):
     def __init__(self, name: str, pin: int):
@@ -85,9 +105,17 @@ class GPIOLamp(common.BaseLamp, GPIO):
             self,
             name,
             on_callable=functools.partial(RPi.GPIO.output, self._pin, RPi.GPIO.HIGH),
-            off_callable=functools.partial(RPi.GPIO.output, self._pin, RPi.GPIO.LOW)
+            off_callable=functools.partial(RPi.GPIO.output, self._pin, RPi.GPIO.LOW),
+            state=common.LampState.OFF,
         )
 
     def __del__(self):
         self.state = common.LampState.OFF
         super().__del__()
+
+    def __repr__(self) -> str:
+        return '{}(name={!r}, pin={!r})'.format(
+            type(self).__name__,
+            self._name,
+            self._pin,
+        )

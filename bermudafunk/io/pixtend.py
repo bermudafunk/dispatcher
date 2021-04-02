@@ -285,7 +285,7 @@ class Pixtend:
         self.__communication_thread = threading.Thread(
             name='Pixtend communication thread',
             target=self._spi_communication_loop,
-            daemon=False
+            daemon=True,
         )
         self.__communication_thread.start()
 
@@ -537,6 +537,8 @@ class PixtendButton(BaseButton):
         self._channel = channel
         self._default_value = default_value
 
+        self._trigger_lock = threading.RLock()
+
         self._old_value = self._pixtend.digital_in(self._channel)
         self._pixtend.digital_in_debounce_seconds(
             channel // 2,
@@ -546,10 +548,20 @@ class PixtendButton(BaseButton):
 
     def _pixtend_trigger(self):
         new_value = self._pixtend.digital_in(self._channel)
-        if new_value != self._old_value:
-            self._old_value = new_value
-            if new_value != self._default_value:
-                self._trigger_event()
+        with self._trigger_lock:
+            if new_value != self._old_value:
+                self._old_value = new_value
+                if new_value != self._default_value:
+                    self._trigger_event()
+
+    def __repr__(self) -> str:
+        return '{}(name={!r}, channel={!r}, default_value={!r}, pixtend={!r})'.format(
+            type(self).__name__,
+            self._name,
+            self._channel,
+            self._default_value,
+            self._pixtend,
+        )
 
 
 class PixtendLamp(BaseLamp):
@@ -561,6 +573,15 @@ class PixtendLamp(BaseLamp):
             on_callable=functools.partial(self._pixtend.digital_out, self._channel, True),
             off_callable=functools.partial(self._pixtend.digital_out, self._channel, False),
             state=state,
+        )
+
+    def __repr__(self) -> str:
+        return '{}(name={!r}, state={!r}, channel={!r}, pixtend={!r})'.format(
+            type(self).__name__,
+            self._name,
+            self._state,
+            self._channel,
+            self._pixtend,
         )
 
 
@@ -598,11 +619,12 @@ class PixtendTriColorLamp(BaseTriColorLamp):
             self._pixtend.digital_out(self._channel_2, False)
 
     def __repr__(self) -> str:
-        return '{}(pixtend={!r}, channel_1={!r}, channel_2={!r}, state={!r}, color={!r})'.format(
+        return '{}(name={!r}, state={!r}, color={!r}, channel_1={!r}, channel_2={!r}, pixtend={!r})'.format(
             type(self).__name__,
-            self._pixtend,
-            self._channel_1,
-            self._channel_2,
+            self._name,
             self._state,
             self._color,
+            self._channel_1,
+            self._channel_2,
+            self._pixtend,
         )
