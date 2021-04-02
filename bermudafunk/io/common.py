@@ -69,7 +69,7 @@ class BaseLamp(abc.ABC):
         self._name = name
 
         self._state = LampState.OFF  # type: LampState
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._blinker = None  # type: typing.Optional[Blinker]
 
         self._on_callable = on_callable
@@ -87,7 +87,7 @@ class BaseLamp(abc.ABC):
     def state(self, new_state: LampState):
         logger.debug('Lamp with name <{}> set state <{}>'.format(self.name, new_state))
         if not isinstance(new_state, LampState):
-            raise ValueError("This supports only values of {}".format(type(LampState)))
+            raise ValueError("This supports only values of {}".format(LampState))
         with self._lock:
             if self._state is not new_state:
                 self._state = new_state
@@ -152,7 +152,6 @@ class Blinker(threading.Thread):
 
         self._frequency = frequency
         self._time_to_sleep = 1 / frequency
-        self._frequency_lock = threading.Lock()
 
         self._stop_event = threading.Event()
 
@@ -164,9 +163,8 @@ class Blinker(threading.Thread):
     def frequency(self, new_frequency: float):
         if not isinstance(new_frequency, (float, int)):
             raise ValueError("Frequency have to be a float or int")
-        with self._frequency_lock:
-            self._frequency = new_frequency
-            self._time_to_sleep = 1 / new_frequency
+        self._frequency = new_frequency
+        self._time_to_sleep = 1 / new_frequency
 
     def run(self):
         for caller in itertools.cycle(self._output_caller):

@@ -19,11 +19,10 @@ class DummyButton(common.BaseButton):
 
 class DummyLamp(common.BaseLamp):
     def __init__(self, name: str):
-        common.BaseLamp.__init__(
-            self,
+        super().__init__(
             name,
-            on_callable=functools.partial(logger.debug, 'Dummy Lamp %s ON'.format(name)),
-            off_callable=functools.partial(logger.debug, 'Dummy Lamp %s OFF'.format(name))
+            on_callable=functools.partial(logger.debug, 'Dummy Lamp {} ON'.format(name)),
+            off_callable=functools.partial(logger.debug, 'Dummy Lamp {} OFF'.format(name))
         )
 
 

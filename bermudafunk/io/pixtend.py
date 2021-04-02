@@ -1,5 +1,6 @@
 import asyncio
 import collections
+import collections.abc
 import enum
 import functools
 import inspect
@@ -187,7 +188,7 @@ class Pixtend:
         self._spi.max_speed_hz = 700000
 
         self.__communication_thread = None  # type: typing.Optional[threading.Thread]
-        self.__communication_thread_terminate = False
+        self.__communication_thread_terminate = threading.Event()
 
         self._observer = set()  # type: typing.Set[typing.Callable]
 
@@ -207,25 +208,26 @@ class Pixtend:
         self._mc_enable.state = LampState.OFF
         self._mc_reset.state = LampState.OFF
 
-    def _pack_output(self):
-        header_data = self.OUT_HEADER.pack(
-            self._model_out,
-            self._mode,
-            self._uc_ctrl_0,
-            self._uc_ctrl_1
-        )
-        header_crc = _calc_crc16(header_data)
+    def _pack_output(self) -> bytes:
+        with self.transfer_lock:
+            header_data = self.OUT_HEADER.pack(
+                self._model_out,
+                self._mode,
+                self._uc_ctrl_0,
+                self._uc_ctrl_1
+            )
+            data = self.OUT_DATA.pack(
+                *self._digital_debounce,
+                self._digital_out,
+                self._relay_out,
+                self._gpio_ctrl,
+                self._gpio_out,
+                *self._gpio_debounce,
+                *self._pwm,
+                self._retain_data_out
+            )
 
-        data = self.OUT_DATA.pack(
-            *self._digital_debounce,
-            self._digital_out,
-            self._relay_out,
-            self._gpio_ctrl,
-            self._gpio_out,
-            *self._gpio_debounce,
-            *self._pwm,
-            self._retain_data_out
-        )
+        header_crc = _calc_crc16(header_data)
         data_crc = _calc_crc16(data)
 
         transfer = self.OUT_FORMAT.pack(header_data, header_crc, data, data_crc)
@@ -237,13 +239,14 @@ class Pixtend:
         if header_crc != _calc_crc16(header_data):
             raise CrcHeaderError
 
-        (
-            self._firmware,
-            self._hardware,
-            self._model_in,
-            self._uc_state,
-            self._uc_warnings,
-        ) = self.IN_HEADER.unpack(header_data)
+        with self.transfer_lock:
+            (
+                self._firmware,
+                self._hardware,
+                self._model_in,
+                self._uc_state,
+                self._uc_warnings,
+            ) = self.IN_HEADER.unpack(header_data)
 
         if self._model_in != self._model_out:
             raise ModelError
@@ -253,31 +256,32 @@ class Pixtend:
         if data_crc != _calc_crc16(data):
             raise CrcDataError
 
-        (
-            self._digital_in,
-            self._analog_in_voltage[0],
-            self._analog_in_voltage[1],
-            self._analog_in_voltage[2],
-            self._analog_in_voltage[3],
-            self._analog_in_current[0],
-            self._analog_in_current[1],
-            self._gpio_in,
-            self._temp[0],
-            self._humid[0],
-            self._temp[1],
-            self._humid[1],
-            self._temp[2],
-            self._humid[2],
-            self._temp[3],
-            self._humid[3],
-            self._retain_data_in
-        ) = self.IN_DATA.unpack(data)
+        with self.transfer_lock:
+            (
+                self._digital_in,
+                self._analog_in_voltage[0],
+                self._analog_in_voltage[1],
+                self._analog_in_voltage[2],
+                self._analog_in_voltage[3],
+                self._analog_in_current[0],
+                self._analog_in_current[1],
+                self._gpio_in,
+                self._temp[0],
+                self._humid[0],
+                self._temp[1],
+                self._humid[1],
+                self._temp[2],
+                self._humid[2],
+                self._temp[3],
+                self._humid[3],
+                self._retain_data_in
+            ) = self.IN_DATA.unpack(data)
 
     def start_communication_thread(self):
         if self.__communication_thread is not None:
             raise RuntimeWarning('Communication thread is already running')
 
-        self.__communication_thread_terminate = False
+        self.__communication_thread_terminate.clear()
         self.__communication_thread = threading.Thread(
             name='Pixtend communication thread',
             target=self._spi_communication_loop,
@@ -289,7 +293,7 @@ class Pixtend:
         if self.__communication_thread is None:
             return
 
-        self.__communication_thread_terminate = True
+        self.__communication_thread_terminate.set()
         self.__communication_thread.join()
         self.__communication_thread = None
 
@@ -310,7 +314,7 @@ class Pixtend:
 
     def _spi_communication_loop(self):
         next_com = timer()
-        while not self.__communication_thread_terminate:
+        while not self.__communication_thread_terminate.is_set():
             self._spi_communicate()
 
             next_com += self._communication_interval
@@ -368,27 +372,30 @@ class Pixtend:
     def digital_out(self, channel: int, val: typing.Optional[bool] = None) -> bool:
         if not (0 <= channel <= 11):
             raise ValueError('Digital output channel must be between 0 and 11')
-        if val is not None:
-            if val:
-                self._digital_out |= (1 << channel)
-            else:
-                self._digital_out &= ~(1 << channel)
-        return self._digital_out & (1 << channel) > 0
+        with self.transfer_lock:
+            if val is not None:
+                if val:
+                    self._digital_out |= (1 << channel)
+                else:
+                    self._digital_out &= ~(1 << channel)
+            return self._digital_out & (1 << channel) > 0
 
     def digital_in(self, channel: int) -> bool:
         if not (0 <= channel <= 15):
             raise ValueError('Digital input channel must be between 0 and 15')
-        return self._digital_in & (1 << channel) > 0
+        with self.transfer_lock:
+            return self._digital_in & (1 << channel) > 0
 
     def digital_in_debounce_cycles(self, channel_duo: int, val: typing.Optional[int] = None) -> int:
         if not (0 <= channel_duo <= 7):
             raise ValueError('Digital debounce channel_duo must be between 0 and 7')
-        if val is not None:
-            val = int(val)
-            if not (0 <= val <= 255):
-                raise ValueError('Digital debounce cycles must be between 0 and 255')
-            self._digital_debounce[channel_duo] = val
-        return self._digital_debounce[channel_duo]
+        with self.transfer_lock:
+            if val is not None:
+                val = int(val)
+                if not (0 <= val <= 255):
+                    raise ValueError('Digital debounce cycles must be between 0 and 255')
+                self._digital_debounce[channel_duo] = val
+            return self._digital_debounce[channel_duo]
 
     def digital_in_debounce_seconds(self, channel_duo: int, val: typing.Optional[float] = None) -> float:
         if val is not None:
@@ -399,26 +406,28 @@ class Pixtend:
     def relay_out(self, channel: int, val: typing.Optional[bool] = None) -> bool:
         if not (0 <= channel <= 3):
             raise ValueError('Relay output channel must be between 0 and 3')
-        if val is not None:
-            if val:
-                self._relay_out |= (1 << channel)
-            else:
-                self._relay_out &= ~(1 << channel)
-        return self._relay_out & (1 << channel) > 0
+        with self.transfer_lock:
+            if val is not None:
+                if val:
+                    self._relay_out |= (1 << channel)
+                else:
+                    self._relay_out &= ~(1 << channel)
+            return self._relay_out & (1 << channel) > 0
 
     def gpio_ctrl(self, channel: int, setting: PixtendGPIOSetting = None):
         if not (0 <= channel <= 3):
             raise ValueError('GPIO channel must be between 0 and 3')
-        if setting is not None:
-            if not isinstance(setting, PixtendGPIOSetting):
-                raise ValueError('GPIO channel settings must be a value of PixtendGPIOSetting')
-            # Clear channel setting, default is INPUT
-            self._gpio_ctrl &= ~(1 << channel | 1 << (channel + 4))
-            if setting is PixtendGPIOSetting.OUTPUT:
-                self._gpio_ctrl |= (1 << channel)
-            elif setting is PixtendGPIOSetting.SENSOR:
-                self._gpio_ctrl |= (1 << (channel + 4))
-        channel_val = (self._gpio_ctrl >> channel) & 0b10001
+        with self.transfer_lock:
+            if setting is not None:
+                if not isinstance(setting, PixtendGPIOSetting):
+                    raise ValueError('GPIO channel settings must be a value of PixtendGPIOSetting')
+                # Clear channel setting, default is INPUT
+                self._gpio_ctrl &= ~(1 << channel | 1 << (channel + 4))
+                if setting is PixtendGPIOSetting.OUTPUT:
+                    self._gpio_ctrl |= (1 << channel)
+                elif setting is PixtendGPIOSetting.SENSOR:
+                    self._gpio_ctrl |= (1 << (channel + 4))
+            channel_val = (self._gpio_ctrl >> channel) & 0b10001
         if channel_val == 0:
             return PixtendGPIOSetting.INPUT
         elif channel_val == 1:
@@ -432,80 +441,91 @@ class Pixtend:
             raise ValueError('GPIO output channel must be between 0 and 3')
         if self.gpio_ctrl(channel) is not PixtendGPIOSetting.OUTPUT:
             raise RuntimeError('GPIO channel must be configured as OUTPUT')
-        if val is not None:
-            if val:
-                self._gpio_out |= (1 << channel)
-            else:
-                self._gpio_out &= ~(1 << channel)
-        return self._gpio_out & (1 << channel) > 0
+        with self.transfer_lock:
+            if val is not None:
+                if val:
+                    self._gpio_out |= (1 << channel)
+                else:
+                    self._gpio_out &= ~(1 << channel)
+            return self._gpio_out & (1 << channel) > 0
 
     def gpio_in(self, channel: int) -> bool:
         if not (0 <= channel <= 3):
             raise ValueError('GPIO input channel must be between 0 and 3')
         if self.gpio_ctrl(channel) is not PixtendGPIOSetting.INPUT:
             raise RuntimeError('GPIO channel must be configured as INPUT')
-        return self._gpio_in & (1 << channel) > 0
+        with self.transfer_lock:
+            return self._gpio_in & (1 << channel) > 0
 
     def gpio_pullup(self, channel: int, val: typing.Optional[bool] = None) -> bool:
         if not (0 <= channel <= 3):
             raise ValueError('GPIO input channel must be between 0 and 3')
         if self.gpio_ctrl(channel) is not PixtendGPIOSetting.INPUT:
             raise RuntimeError('GPIO channel must be configured as INPUT')
-        if val is not None:
-            if val:
-                self._gpio_out |= (1 << channel)
-            else:
-                self._gpio_out &= ~(1 << channel)
-        return self._gpio_out & (1 << channel) > 0
+        with self.transfer_lock:
+            if val is not None:
+                if val:
+                    self._gpio_out |= (1 << channel)
+                else:
+                    self._gpio_out &= ~(1 << channel)
+            return self._gpio_out & (1 << channel) > 0
 
     def gpio_in_debounce_cycles(self, channel_duo: int, val: typing.Optional[int] = None):
         if not (0 <= channel_duo <= 1):
             raise ValueError('GPIO debounce channel_duo must be 0 and 1')
-        if val is not None:
-            val = int(val)
-            if not (0 <= val <= 255):
-                raise ValueError('GPIO debounce cycles must be between 0 and 255')
-            self._gpio_debounce[channel_duo] = val
-        return self._digital_debounce[channel_duo]
+        with self.transfer_lock:
+            if val is not None:
+                val = int(val)
+                if not (0 <= val <= 255):
+                    raise ValueError('GPIO debounce cycles must be between 0 and 255')
+                self._gpio_debounce[channel_duo] = val
+            return self._digital_debounce[channel_duo]
 
     def gpio_in_debounce_seconds(self, channel_duo: int) -> float:
         return self.gpio_in_debounce_cycles(channel_duo) * self._communication_interval
 
     @property
     def retain_data_out(self) -> bytes:
-        return self._retain_data_out
+        with self.transfer_lock:
+            return self._retain_data_out
 
     @retain_data_out.setter
     def retain_data_out(self, val: bytes):
         val = bytes(val)
         if len(val) > 64:
             raise ValueError('Retain data are allowed to be 64 bytes')
-        self._retain_data_out = val
+        with self.transfer_lock:
+            self._retain_data_out = val
 
     @property
     def retain_data_in(self) -> bytes:
-        return self._retain_data_in
+        with self.transfer_lock:
+            return self._retain_data_in
 
     def analog_in_voltage(self, channel) -> float:
         if not (0 <= channel <= 3):
             raise ValueError('Analog input voltage channel must be between 0 and 3')
-        return self._analog_in_voltage[channel] * 10 / 1024
+        with self.transfer_lock:
+            return self._analog_in_voltage[channel] * 10 / 1024
 
     def analog_in_current(self, channel) -> float:
         if not (4 <= channel <= 5):
             raise ValueError('Analog input current channel must be between 4 and 5')
-        return self._analog_in_current[channel - 4] * 0.020158400229358
+        with self.transfer_lock:
+            return self._analog_in_current[channel - 4] * 0.020158400229358
 
     @property
     def watchdog(self) -> PixtendWatchDog:
-        return PixtendWatchDog(self._uc_ctrl_0)
+        with self.transfer_lock:
+            return PixtendWatchDog(self._uc_ctrl_0)
 
     @watchdog.setter
     def watchdog(self, val: PixtendWatchDog):
         val = int(val)
         if not (0 <= val <= 10):
             raise ValueError('UCCtrl0 / Watchdog has to be between 0 and 10')
-        self._uc_ctrl_0 = val
+        with self.transfer_lock:
+            self._uc_ctrl_0 = val
 
 
 class PixtendButton(BaseButton):
