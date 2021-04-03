@@ -1,3 +1,6 @@
+import itertools
+import logging
+
 import attr
 import pandas
 from transitions import State
@@ -5,6 +8,8 @@ from transitions.extensions.diagrams import GraphMachine
 
 from bermudafunk.dispatcher.data_types import StudioLampState, triggers
 from bermudafunk.io.common import TriColorLampState, LampState, TriColorLampColor
+
+logger = logging.getLogger(__name__)
 
 GraphMachine.style_attributes['node']['default']['shape'] = 'octagon'
 GraphMachine.style_attributes['node']['active']['shape'] = 'doubleoctagon'
@@ -82,10 +87,14 @@ def load_states_transitions():
                 ),
             )
         )
+        if state.name in states:
+            raise ValueError("Duplicate state name {}".format(state.name))
         states[state.name] = state
 
     assert len(states_data["state"]) == len(set(n.lower() for n in states_data["state"])), "duplicate state names"
     assert len(states) == len(set(s.lamp_state_target for s in states.values())), "duplicate lamp state targets"
+
+    check_states_ignore_immediate_lamp(states)
 
     transitions_data = pandas.read_excel("dispatcher.ods", sheet_name="transitions", converters={"y_to_x": bool})
     transitions = transitions_data.to_dict(orient="records")
@@ -96,3 +105,43 @@ def load_states_transitions():
     assert len(transitions) == len(set((t["trigger"], t["source"]) for t in transitions)), "duplicate actions"
 
     return states, transitions
+
+
+def check_states_ignore_immediate_lamp(states):
+    modified_states = {}
+    for state in states.values():
+        lst = state.lamp_state_target
+        modified_states[state.name] = attr.evolve(
+            lst,
+            automat=attr.evolve(
+                lst.automat,
+                immediate=TriColorLampState(
+                    state=LampState.OFF,
+                    color=TriColorLampColor.NONE,
+                )
+            ),
+            x=attr.evolve(
+                lst.x,
+                immediate=TriColorLampState(
+                    state=LampState.OFF,
+                    color=TriColorLampColor.NONE,
+                )
+            ),
+            y=attr.evolve(
+                lst.y,
+                immediate=TriColorLampState(
+                    state=LampState.OFF,
+                    color=TriColorLampColor.NONE,
+                )
+            ),
+            other=attr.evolve(
+                lst.other,
+                immediate=TriColorLampState(
+                    state=LampState.OFF,
+                    color=TriColorLampColor.NONE,
+                )
+            )
+        )
+    for state1, state2 in itertools.combinations(modified_states.keys(), 2):
+        if modified_states[state1] == modified_states[state2]:
+            logger.warn("Duplicate lamp state ignoring immediate on states {} & {}".format(state1, state2))
