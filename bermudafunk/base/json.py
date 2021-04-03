@@ -12,7 +12,7 @@ class AttrEnumJSONEncoder(JSONEncoder):
         if isinstance(o, TriColorLampState):
             return {
                 "state": o.state.name,
-                "frequency": o.state.value,
+                "frequency": o.state.frequency,
                 "color": o.color,
             }
         if attr.has(type(o)):

@@ -139,7 +139,7 @@ async def run(dispatcher: Dispatcher):
         return json.dumps({'kind': 'dispatcher.status', 'payload': dispatcher.status})
 
     def lamp_state_msg(studio: BaseStudio):
-        return json.dumps({'kind': 'studio.lamp.status', 'payload': {'studio': studio.name, 'status': studio.lamp_status}})
+        return json.dumps({'kind': 'studio.lamp.status', 'payload': {'studio': studio.name, 'status': studio.lamp_state}})
 
     app.add_routes(routes)
 
