@@ -15,7 +15,7 @@ import prometheus_client
 import spidev
 
 from bermudafunk.base import loop, cleanup_event
-from bermudafunk.io.common import LampState, BaseButton, BaseLamp, BaseTriColorLamp, TriColorLampColors
+from bermudafunk.io.common import LampState, BaseButton, BaseLamp, BaseTriColorLamp, TriColorLampColor
 from bermudafunk.io.gpio import GPIOLamp as GPIOOutput
 
 logger = logging.getLogger(__name__)
@@ -593,7 +593,7 @@ class PixtendTriColorLamp(BaseTriColorLamp):
         channel_1: int,
         channel_2: int,
         state: LampState = LampState.OFF,
-        color: TriColorLampColors = TriColorLampColors.GREEN,
+        color: TriColorLampColor = TriColorLampColor.GREEN,
     ):
         self._pixtend = pixtend
         self._channel_1 = int(channel_1)
@@ -610,8 +610,8 @@ class PixtendTriColorLamp(BaseTriColorLamp):
 
     def _on_callable(self):
         with self._pixtend.transfer_lock:
-            self._pixtend.digital_out(self._channel_1, bool(TriColorLampColors.GREEN & self._color))
-            self._pixtend.digital_out(self._channel_2, bool(TriColorLampColors.RED & self._color))
+            self._pixtend.digital_out(self._channel_1, bool(TriColorLampColor.GREEN & self._color))
+            self._pixtend.digital_out(self._channel_2, bool(TriColorLampColor.RED & self._color))
 
     def _off_callable(self):
         with self._pixtend.transfer_lock:

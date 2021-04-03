@@ -51,7 +51,7 @@ $blink-default-freq: 2;
     }
 
     .lamp {
-        &.#{$lamp-color} {
+        &[data-color^='#{$lamp-color}'] {
             &[data-state^='off'] {
                 background-color: $off-color;
             }

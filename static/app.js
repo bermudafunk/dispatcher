@@ -27,9 +27,10 @@ const update_selected_studio = function (new_value) {
 const update_lamp_status = function (payload) {
     if (payload.studio in lamp_map) {
         let lamp_entry = lamp_map[payload.studio];
-        for (let color in payload.status) {
-            lamp_entry[color][0].dataset.state = payload.status[color].state.toLowerCase();
-            lamp_entry[color][0].style.animationDuration = (1 / payload.status[color].blink_freq) + 's';
+        for (let lamp_type in payload.status) {
+            lamp_entry[lamp_type][0].dataset.state = payload.status[lamp_type].state.toLowerCase();
+            lamp_entry[lamp_type][0].dataset.color = payload.status[lamp_type].color.toLowerCase();
+            lamp_entry[lamp_type][0].style.animationDuration = (1 / payload.status[lamp_type].frequency) + 's';
         }
     }
 };
@@ -100,7 +101,7 @@ $.get(
             let lamp_entry = {
                 'row': row_template.clone()
             };
-            ['name', 'green', 'yellow', 'red'].forEach(function (key) {
+            ['name', 'main', 'immediate'].forEach(function (key) {
                 lamp_entry[key] = $('#' + key, lamp_entry['row']);
                 lamp_entry[key].removeAttr('id');
             });

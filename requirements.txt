@@ -7,3 +7,6 @@ pygraphviz~=1.6
 spidev~=3.5
 prometheus_client~=0.8.0
 python-dateutil~=2.8.1
+pandas~=1.2.3
+odfpy~=1.4.1
+attrs~=20.3.0

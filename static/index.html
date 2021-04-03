@@ -17,13 +17,10 @@
                 <tr>
                     <td id="name" style="vertical-align: middle;">Studio</td>
                     <td>
-                        <div id="green" class="lamp green" data-state="off"></div>
+                        <div id="main" class="lamp" data-state="on" data-color="green"></div>
                     </td>
                     <td>
-                        <div id="yellow" class="lamp yellow" data-state="off"></div>
-                    </td>
-                    <td>
-                        <div id="red" class="lamp red" data-state="off"></div>
+                        <div id="immediate" class="lamp" data-state="on" data-color="green"></div>
                     </td>
                 </tr>
             </table>
@@ -89,8 +86,12 @@
     </div>
     <div class="row">
         <div class="col">
-            <button type="button" class="btn btn-block btn-secondary graph-buttons" data-img="/api/v1/full_state_machine">Show complete state machine</button>
-            <button type="button" class="btn btn-block btn-secondary graph-buttons" data-img="/api/v1/partial_state_machine">Show reachable states</button>
+            <button type="button" class="btn btn-block btn-secondary graph-buttons" data-img="/api/v1/full_state_machine">Show complete
+                state machine
+            </button>
+            <button type="button" class="btn btn-block btn-secondary graph-buttons" data-img="/api/v1/partial_state_machine">Show reachable
+                states
+            </button>
         </div>
     </div>
     <div class="row">

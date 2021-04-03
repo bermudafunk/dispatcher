@@ -3,7 +3,7 @@ from bermudafunk.SymNet import SymNetDevice
 from bermudafunk.dispatcher import web
 from bermudafunk.dispatcher.data_types import DispatcherStudioDefinition, Studio, Automat
 from bermudafunk.dispatcher.dispatcher import Dispatcher
-from bermudafunk.io.pixtend import PixtendLamp, Pixtend
+from bermudafunk.io.pixtend import Pixtend, PixtendTriColorLamp
 
 if __name__ == '__main__':
     base.logger.debug('Main Start')
@@ -17,26 +17,52 @@ if __name__ == '__main__':
     main_selector = device.define_selector(1, 8)
 
     automat = Automat(
-        green_lamp=PixtendLamp(name='Automat Green', channel=0, pixtend=pixtend),
-        yellow_lamp=PixtendLamp(name='Automat Yellow', channel=1, pixtend=pixtend),
+        main_lamp=PixtendTriColorLamp(
+            name='Automat Main Lamp',
+            pixtend=pixtend,
+            channel_1=0,
+            channel_2=1,
+        ),
     )
 
     af_1 = Studio(
         name='AlteFeuerwache1',
-        green_lamp=PixtendLamp(name='AF1 Green', channel=2, pixtend=pixtend),
-        yellow_lamp=PixtendLamp(name='AF1 Yellow', channel=3, pixtend=pixtend),
-        red_lamp=PixtendLamp(name='AF1 RED', channel=8, pixtend=pixtend),
+        main_lamp=PixtendTriColorLamp(
+            name='Alte Feuerwache 1 Main Lamp',
+            pixtend=pixtend,
+            channel_1=2,
+            channel_2=3,
+        ),
+        immediate_lamp=PixtendTriColorLamp(
+            name='Alte Feuerwache 1 Immediate Lamp',
+            pixtend=pixtend,
+            channel_1=8,
+            channel_2=9,
+        ),
     )
     af_2 = Studio(
         name='AlteFeuerwache2',
-        green_lamp=PixtendLamp(name='AF2 Green', channel=4, pixtend=pixtend),
-        yellow_lamp=PixtendLamp(name='AF2 Yellow', channel=5, pixtend=pixtend),
-        red_lamp=PixtendLamp(name='AF2 RED', channel=9, pixtend=pixtend),
+        main_lamp=PixtendTriColorLamp(
+            name='Alte Feuerwache 2 Main Lamp',
+            pixtend=pixtend,
+            channel_1=4,
+            channel_2=5,
+        ),
+        immediate_lamp=PixtendTriColorLamp(
+            name='Alte Feuerwache 2 Immediate Lamp',
+            pixtend=pixtend,
+            channel_1=10,
+            channel_2=11,
+        ),
     )
     af_3 = Studio(
         name='Aussenstelle',
-        green_lamp=PixtendLamp(name='AF2 Green', channel=6, pixtend=pixtend),
-        yellow_lamp=PixtendLamp(name='AF2 Yellow', channel=7, pixtend=pixtend),
+        main_lamp=PixtendTriColorLamp(
+            name='Außenstelle Main Lamp',
+            pixtend=pixtend,
+            channel_1=6,
+            channel_2=7,
+        ),
     )
 
     dispatcher = Dispatcher(

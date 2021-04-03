@@ -9,6 +9,8 @@ import threading
 import time
 import typing
 
+import attr
+
 from bermudafunk.base import loop
 
 logger = logging.getLogger(__name__)
@@ -143,13 +145,20 @@ class BaseLamp(abc.ABC):
 
 
 @enum.unique
-class TriColorLampColors(enum.Flag):
+class TriColorLampColor(enum.Flag):
+    NONE = 0
     GREEN = enum.auto()
     RED = enum.auto()
     YELLOW = GREEN | RED
 
     def __repr__(self):
         return '{}.{}'.format(type(self).__name__, self.name)
+
+
+@attr.frozen
+class TriColorLampState:
+    state: LampState = attr.field(validator=attr.validators.in_(LampState))
+    color: TriColorLampColor = attr.field(validator=attr.validators.in_(TriColorLampColor))
 
 
 class BaseTriColorLamp(BaseLamp):
@@ -159,7 +168,7 @@ class BaseTriColorLamp(BaseLamp):
         on_callable: typing.Callable,
         off_callable: typing.Callable,
         state: LampState,
-        color: TriColorLampColors,
+        color: TriColorLampColor,
     ):
         self._color = color
         super().__init__(
@@ -170,18 +179,32 @@ class BaseTriColorLamp(BaseLamp):
         )
 
     @property
-    def color(self) -> TriColorLampColors:
+    def color(self) -> TriColorLampColor:
         return self._color
 
     @color.setter
-    def color(self, new_color: TriColorLampColors):
+    def color(self, new_color: TriColorLampColor):
         logger.debug('Lamp with name <{}> set color <{}>'.format(self.name, new_color))
-        if not isinstance(new_color, TriColorLampColors):
-            raise ValueError("This supports only values of {}".format(type(TriColorLampColors)))
+        if not isinstance(new_color, TriColorLampColor):
+            raise ValueError("This supports only values of {}".format(type(TriColorLampColor)))
         with self._lock:
             if self._color is not new_color:
                 self._color = new_color
                 self._assure_state()
+
+    @property
+    def color_lamp_state(self) -> TriColorLampState:
+        with self._lock:
+            return TriColorLampState(color=self._color, state=self._state)
+
+    @color_lamp_state.setter
+    def color_lamp_state(self, new_color_lamp_state: TriColorLampState):
+        if not isinstance(new_color_lamp_state, TriColorLampState):
+            raise ValueError("This supports only values of {}".format(type(TriColorLampState)))
+        with self._lock:
+            self.state = new_color_lamp_state.state
+            self.color = new_color_lamp_state.color
+            self._assure_state()
 
     def __repr__(self) -> str:
         return '{}(name={!r}, state={!r}, color={!r})'.format(

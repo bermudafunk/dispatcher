@@ -1,6 +1,5 @@
 import asyncio
 import functools
-import json
 import logging
 import weakref
 from concurrent.futures import ThreadPoolExecutor
@@ -9,6 +8,7 @@ import aiohttp
 from aiohttp import web
 
 import bermudafunk.base
+from bermudafunk.base import json
 from bermudafunk.dispatcher.data_types import BaseStudio, ButtonEvent, Button
 from bermudafunk.dispatcher.dispatcher import Dispatcher
 
@@ -51,15 +51,15 @@ async def run(dispatcher: Dispatcher):
 
     @routes.get('/api/v1/status')
     async def list_studios(_: web.Request) -> web.StreamResponse:
-        return web.json_response(dispatcher.status)
+        return web.json_response(dispatcher.status, dumps=json.dumps)
 
     @routes.get('/api/v1/studio_lamp_names')
     async def list_studios(_: web.Request) -> web.StreamResponse:
-        return web.json_response([studio.name for studio in dispatcher.studios_with_automat])
+        return web.json_response([studio.name for studio in dispatcher.studios_with_automat], dumps=json.dumps)
 
     @routes.get('/api/v1/studio_names')
     async def list_studios(_: web.Request) -> web.StreamResponse:
-        return web.json_response([studio.name for studio in dispatcher.studios])
+        return web.json_response([studio.name for studio in dispatcher.studios], dumps=json.dumps)
 
     @routes.get('/api/v1/{studio_name}/press/{button}')
     async def button_press(request: web.Request) -> web.StreamResponse:
@@ -70,13 +70,13 @@ async def run(dispatcher: Dispatcher):
 
         await event.studio.dispatcher_button_event_queue.put(event)
 
-        return web.json_response({'status': 'emitted_button_event'})
+        return web.json_response({'status': 'emitted_button_event'}, dumps=json.dumps)
 
     @routes.get('/api/v1/{studio_name}/lamps')
-    async def lamp_status(request: web.Request) -> web.StreamResponse:
+    async def lamp_state(request: web.Request) -> web.StreamResponse:
         studio = BaseStudio.names[request.match_info['studio_name']]
 
-        return web.json_response(studio.lamp_status)
+        return web.json_response(studio.lamp_state, dumps=json.dumps)
 
     @routes.get('/api/v1/ws')
     async def websocket_status(request: web.Request) -> web.StreamResponse:
@@ -86,7 +86,7 @@ async def run(dispatcher: Dispatcher):
         _websockets.add(ws)
         await ws.send_str(dispatcher_status_msg())
         for studio in dispatcher.studios_with_automat:
-            await ws.send_str(lamp_status_msg(studio))
+            await ws.send_str(lamp_state_msg(studio))
 
         try:
             async for msg in ws:
@@ -102,7 +102,7 @@ async def run(dispatcher: Dispatcher):
                             if req['type'] == 'dispatcher.status':
                                 await ws.send_str(dispatcher_status_msg())
                             elif req['type'] == 'studio.lamp.status':
-                                await ws.send_str(lamp_status_msg(BaseStudio.names[req['studio']]))
+                                await ws.send_str(lamp_state_msg(BaseStudio.names[req['studio']]))
                         except json.JSONDecodeError as e:
                             await ws.send_str(json.dumps({'kind': 'error', 'exception': str(e)}))
                         except TypeError as e:
@@ -131,14 +131,14 @@ async def run(dispatcher: Dispatcher):
             for ws in _websockets:
                 await ws.send_str(dispatcher_status_msg())
                 for studio in dispatcher.studios_with_automat:
-                    await ws.send_str(lamp_status_msg(studio))
+                    await ws.send_str(lamp_state_msg(studio))
 
             observer_event.clear()
 
     def dispatcher_status_msg():
         return json.dumps({'kind': 'dispatcher.status', 'payload': dispatcher.status})
 
-    def lamp_status_msg(studio: BaseStudio):
+    def lamp_state_msg(studio: BaseStudio):
         return json.dumps({'kind': 'studio.lamp.status', 'payload': {'studio': studio.name, 'status': studio.lamp_status}})
 
     app.add_routes(routes)

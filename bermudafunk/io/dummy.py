@@ -27,12 +27,12 @@ class DummyLamp(common.BaseLamp):
         )
 
 
-class DummyTriStateLamp(common.BaseTriColorLamp):
+class DummyTriColorLamp(common.BaseTriColorLamp):
     def __init__(
         self,
         name: str,
         state: common.LampState = common.LampState.OFF,
-        color: common.TriColorLampColors = common.TriColorLampColors.GREEN,
+        color: common.TriColorLampColor = common.TriColorLampColor.GREEN,
     ):
         super().__init__(
             name=name,

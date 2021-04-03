@@ -3,17 +3,16 @@ import enum
 import functools
 import typing
 
-from bermudafunk.io.common import BaseLamp, LampState, BaseButton
-from bermudafunk.io.dummy import DummyLamp
+import attr
 
-StudioLampStatus = typing.NamedTuple(
-    'StudioLampStatus',
-    [
-        ('green', LampState),
-        ('yellow', LampState),
-        ('red', LampState)
-    ]
-)
+from bermudafunk.io.common import BaseButton, BaseTriColorLamp, TriColorLampState
+from bermudafunk.io.dummy import DummyTriColorLamp
+
+
+@attr.frozen
+class StudioLampState:
+    main: TriColorLampState = attr.field(validator=attr.validators.instance_of(TriColorLampState))
+    immediate: TriColorLampState = attr.field(validator=attr.validators.instance_of(TriColorLampState))
 
 
 @enum.unique
@@ -24,22 +23,21 @@ class Button(enum.Enum):
 
 
 class BaseStudio:
-    names = {}  # type: typing.Dict[str, Studio]
+    names = {}  # type: typing.Dict[str, BaseStudio]
 
-    def __init__(self,
-                 name: str,
-                 green_lamp: BaseLamp = None,
-                 yellow_lamp: BaseLamp = None,
-                 red_lamp: BaseLamp = None
-                 ):
+    def __init__(
+        self,
+        name: str,
+        main_lamp: BaseTriColorLamp = None,
+        immediate_lamp: BaseTriColorLamp = None,
+    ):
         self._name = name
         if name in BaseStudio.names.keys():
             raise ValueError('name already used %s' % name)
         Studio.names[name] = self
 
-        self._green_lamp = green_lamp if green_lamp else DummyLamp(name="green dummy " + name)
-        self._yellow_lamp = yellow_lamp if yellow_lamp else DummyLamp(name="yellow dummy " + name)
-        self._red_lamp = red_lamp if red_lamp else DummyLamp(name="red dummy " + name)
+        self._main_lamp = main_lamp if main_lamp else DummyTriColorLamp(name="main dummy of " + name)
+        self._immediate_lamp = immediate_lamp if immediate_lamp else DummyTriColorLamp(name="immediate dummy of " + name)
 
         self.dispatcher_button_event_queue = None  # type: typing.Optional[asyncio.Queue]
 
@@ -48,69 +46,42 @@ class BaseStudio:
         return self._name
 
     @property
-    def green_lamp(self) -> BaseLamp:
-        return self._green_lamp
+    def main_lamp(self) -> BaseTriColorLamp:
+        return self._main_lamp
 
     @property
-    def yellow_lamp(self) -> BaseLamp:
-        return self._yellow_lamp
+    def immediate_lamp(self) -> BaseTriColorLamp:
+        return self._immediate_lamp
 
     @property
-    def red_lamp(self) -> BaseLamp:
-        return self._red_lamp
-
-    @property
-    def lamp_status(self) -> typing.Dict[str, typing.Dict[str, typing.Union[str, int]]]:
-        return {
-            'green':
-                {
-                    'state': self.green_lamp.state.name,
-                    'blink_freq': self.green_lamp.state.frequency
-                },
-            'yellow':
-                {
-                    'state': self.yellow_lamp.state.name,
-                    'blink_freq': self.yellow_lamp.state.frequency
-                },
-            'red':
-                {
-                    'state': self.red_lamp.state.name,
-                    'blink_freq': self.red_lamp.state.frequency
-                },
-        }
-
-    @property
-    def lamp_status_typed(self) -> StudioLampStatus:
-        return StudioLampStatus(
-            green=self.green_lamp.state,
-            yellow=self.yellow_lamp.state,
-            red=self.red_lamp.state,
+    def lamp_state(self) -> StudioLampState:
+        return StudioLampState(
+            main=self._main_lamp.color_lamp_state,
+            immediate=self._immediate_lamp.color_lamp_state,
         )
 
-    @lamp_status_typed.setter
-    def lamp_status_typed(self, studio_lamp_status: StudioLampStatus):
-        self.green_lamp.state = studio_lamp_status.green
-        self.yellow_lamp.state = studio_lamp_status.yellow
-        self.red_lamp.state = studio_lamp_status.red
+    @lamp_state.setter
+    def lamp_state(self, studio_lamp_status: StudioLampState):
+        self._main_lamp.color_lamp_state = studio_lamp_status.main
+        self._immediate_lamp.color_lamp_state = studio_lamp_status.immediate
 
 
 class Automat(BaseStudio):
-
-    def __init__(self, green_lamp: BaseLamp = None, yellow_lamp: BaseLamp = None, red_lamp: BaseLamp = None):
-        super().__init__('Automat', green_lamp, yellow_lamp, red_lamp)
+    def __init__(self, main_lamp: BaseTriColorLamp = None):
+        super().__init__(name='Automat', main_lamp=main_lamp)
 
 
 class Studio(BaseStudio):
-    def __init__(self,
-                 name: str,
-                 takeover_button: BaseButton = None,
-                 release_button: BaseButton = None,
-                 immediate_button: BaseButton = None,
-                 green_lamp: BaseLamp = None,
-                 yellow_lamp: BaseLamp = None,
-                 red_lamp: BaseLamp = None
-                 ):
-        super(Studio, self).__init__(name=name, green_lamp=green_lamp, yellow_lamp=yellow_lamp, red_lamp=red_lamp)
+    def __init__(
+        self,
+        name: str,
+        takeover_button: BaseButton = None,
+        release_button: BaseButton = None,
+        immediate_button: BaseButton = None,
+        main_lamp: BaseTriColorLamp = None,
+        immediate_lamp: BaseTriColorLamp = None,
+    ):
+        super(Studio, self).__init__(name=name, main_lamp=main_lamp, immediate_lamp=immediate_lamp)
         self._takeover_button = None  # type: typing.Optional[BaseButton]
         self._release_button = None  # type: typing.Optional[BaseButton]
         self._immediate_button = None  # type: typing.Optional[BaseButton]
@@ -186,5 +157,18 @@ class Studio(BaseStudio):
         return '<Studio: name=%s>' % self.name
 
 
-DispatcherStudioDefinition = typing.NamedTuple('DispatcherStudioDefinition', [('studio', BaseStudio), ('selector_value', int)])
-ButtonEvent = typing.NamedTuple('ButtonEvent', [('studio', Studio), ('button', Button)])
+@attr.frozen
+class DispatcherStudioDefinition:
+    studio: BaseStudio = attr.field(validator=attr.validators.instance_of(BaseStudio))
+    selector_value: int = attr.field(validator=attr.validators.instance_of(int))
+
+
+@attr.frozen
+class ButtonEvent:
+    studio: Studio = attr.field(validator=attr.validators.instance_of(Studio))
+    button: Button = attr.field(validator=attr.validators.instance_of(Button))
+
+
+triggers = {"next_hour", "immediate_state_timeout", "immediate_release_timeout"} | set(
+    ("{}_{}".format(button.value, studio) for button in Button for studio in ("X", "Y"))
+)

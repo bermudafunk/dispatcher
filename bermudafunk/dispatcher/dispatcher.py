@@ -11,8 +11,8 @@ from transitions import EventData, MachineError
 
 import bermudafunk.SymNet
 from bermudafunk import base
-from bermudafunk.dispatcher.data_types import BaseStudio, Button, DispatcherStudioDefinition, Studio
-from bermudafunk.dispatcher.transitions import LampAwareMachine as Machine, States, transitions, LampStateTarget
+from bermudafunk.dispatcher.data_types import BaseStudio, Button, ButtonEvent, DispatcherStudioDefinition, Studio
+from bermudafunk.dispatcher.transitions import LampAwareMachine as Machine, LampStateTarget, load_states_transitions
 from bermudafunk.dispatcher.utils import calc_next_hour
 
 logger = logging.getLogger(__name__)
@@ -112,10 +112,10 @@ class Dispatcher:
         self._automat = automat
 
         # studios to switch between and automat
-        self._studios = []  # type: typing.List[Studio]
+        self._studios = []  # type: typing.List[BaseStudio]
         # caching dictionaries to provide lookups
-        self._studios_to_selector_value = {}  # type: typing.Dict[Studio, int]
-        self._selector_value_to_studio = {}  # type: typing.Dict[int, Studio]
+        self._studios_to_selector_value = {}  # type: typing.Dict[BaseStudio, int]
+        self._selector_value_to_studio = {}  # type: typing.Dict[int, BaseStudio]
         for dispatcher_studio in dispatcher_studios:
             assert dispatcher_studio.selector_value not in self._selector_value_to_studio.keys()
             self._studios.append(dispatcher_studio.studio)
@@ -140,32 +140,30 @@ class Dispatcher:
         self.__y = None
         self._y = None  # type: typing.Optional[Studio]
 
-        States.AUTOMAT_ON_AIR.value.add_callback('enter', self._change_to_automat)
-        States.STUDIO_X_ON_AIR.value.add_callback('enter', self._change_to_studio)
+        states, transitions = load_states_transitions()
+
+        states['automat_on_air'].add_callback('enter', self._change_to_automat)
+        states['studio_X_on_air'].add_callback('enter', self._change_to_studio)
 
         # Initialize the underlying transitions machine
         self._machine = Machine(
-            states=[state.value for state in States],
-            initial=States.AUTOMAT_ON_AIR.value,
+            states=list(states.values()),
+            initial=states['automat_on_air'],
             ignore_invalid_triggers=True,
             send_event=True,
             before_state_change=[self._before_state_change],
             after_state_change=[self._after_state_change],
-            finalize_event=[self._audit_state, self._assure_lamp_status, self._notify_machine_observers]
+            finalize_event=[self._audit_state, self._assure_lamp_state, self._notify_machine_observers],
         )
 
         # Add the transitions between the states to the machine
         for transition in transitions:
-            if 'switch_to_y' in transition:
-                if transition['switch_to_y']:
+            if 'y_to_x' in transition:
+                if transition['y_to_x']:
                     if 'before' not in transition:
                         transition['before'] = []
-                    transition['before'].append(self._prepare_switch_to_y)
-                del transition['switch_to_y']
-
-            for name, value in transition.items():
-                if isinstance(value, States):
-                    transition[name] = value.value
+                    transition['before'].append(self._prepare_y_to_x)
+                del transition['y_to_x']
             self._machine.add_transition(**transition)
 
         # Assure to ignore button presses which are not in any transition
@@ -211,14 +209,14 @@ class Dispatcher:
         return self._machine
 
     @property
-    def studios(self) -> typing.List[Studio]:
+    def studios(self) -> typing.List[BaseStudio]:
         return self._studios
 
     @property
     def studios_with_automat(self) -> typing.List[BaseStudio]:
         return [self._automat.studio] + self._studios
 
-    def _prepare_switch_to_y(self, _: EventData = None):
+    def _prepare_y_to_x(self, _: EventData = None):
         self._x, self._y = self._y, None
 
     def _change_to_automat(self, _: EventData = None):
@@ -311,21 +309,20 @@ class Dispatcher:
                     pass
 
             self._audit_state()
-            self._assure_lamp_status()
+            self._assure_lamp_state()
 
-    def _assure_lamp_status(self, _: EventData = None):
+    def _assure_lamp_state(self, _: EventData = None):
         """Set the lamp state in studios"""
         logger.debug('assure lamp status')
         new_lamp_state = self._machine.get_state(self._machine.state).lamp_state_target  # type: LampStateTarget
-        self._automat.studio.lamp_status_typed = new_lamp_state.automat
+        self._automat.studio.lamp_state = new_lamp_state.automat
         for studio in self._studios:
             if studio == self._x:
-                logger.debug(new_lamp_state.x)
-                studio.lamp_status_typed = new_lamp_state.x
+                studio.lamp_state = new_lamp_state.x
             elif studio == self._y:
-                studio.lamp_status_typed = new_lamp_state.y
+                studio.lamp_state = new_lamp_state.y
             else:
-                studio.lamp_status_typed = new_lamp_state.other
+                studio.lamp_state = new_lamp_state.other
 
     def _audit_state(self, _: EventData = None):
         """Assure the required studios and only these are set"""
@@ -391,7 +388,7 @@ class Dispatcher:
             except MachineError as e:
                 logger.critical(e)
 
-            self._assure_lamp_status()
+            self._assure_lamp_state()
         finally:
             self._next_hour_timer = None
 
