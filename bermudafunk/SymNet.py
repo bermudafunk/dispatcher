@@ -3,11 +3,17 @@ import logging
 import re
 import typing
 
+import attr
+
 from bermudafunk import base
 
 logger = logging.getLogger(__name__)
 
-SymNetRawControllerState = typing.NamedTuple('SymNetRawControllerState', [('controller_number', int), ('controller_value', int)])
+
+@attr.s(frozen=True)
+class SymNetRawControllerState:
+    controller_number: int = attr.ib(converter=int, validator=attr.validators.instance_of(int))
+    controller_value: int = attr.ib(converter=int, validator=attr.validators.instance_of(int))
 
 
 class SymNetRawProtocolCallback:

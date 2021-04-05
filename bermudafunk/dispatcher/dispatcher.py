@@ -6,6 +6,7 @@ import typing
 import weakref
 from datetime import datetime
 
+import attr
 from dateutil import tz
 from transitions import EventData, MachineError
 
@@ -41,7 +42,12 @@ class Dispatcher:
     They are activated if the name of the timer is contained in the state name.
     The timers are not reset if the name of the timer is in both src and dest state name.
     """
-    _save_state = typing.NamedTuple('_save_state', [('x', str), ('y', str), ('state', str)])
+
+    @attr.s(frozen=True, auto_attribs=True)
+    class _SaveState:
+        x: str
+        y: str
+        state: str
 
     def __init__(self,
                  symnet_controller: bermudafunk.SymNet.SymNetSelectorController,
@@ -459,7 +465,7 @@ class Dispatcher:
         try:
             with open(self.file_path, 'r') as fp:
                 state = json.load(fp)
-                state = self._save_state(**state)
+                state = self._SaveState(**state)
                 logger.debug(state)
 
             if state.x:
@@ -487,7 +493,7 @@ class Dispatcher:
             logger.critical('Could load dispatcher state: %s', e)
 
     def save(self):
-        state = self._save_state(
+        state = self._SaveState(
             x=self._x.name if self._x else None,
             y=self._y.name if self._y else None,
             state=self._machine.state
@@ -495,6 +501,6 @@ class Dispatcher:
         logger.debug(state)
         try:
             with open(self.file_path, 'w') as fp:
-                json.dump(state._asdict(), fp)
+                json.dump(attr.asdict(state), fp)
         except Exception as e:
             logger.error(e)
