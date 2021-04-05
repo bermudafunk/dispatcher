@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 # Get a precise timer for our interval timing.
 # Try to get a timer that is guaranteed to only monotonically increase.
+timer: typing.Callable[[], float]
 if hasattr(time, "clock_gettime") and hasattr(time, "CLOCK_MONOTONIC_RAW"):
     timer = functools.partial(time.clock_gettime, time.CLOCK_MONOTONIC_RAW)
 elif hasattr(time, "monotonic"):
@@ -187,10 +188,10 @@ class Pixtend:
         self._spi.open(0, 0)
         self._spi.max_speed_hz = 700000
 
-        self.__communication_thread = None  # type: typing.Optional[threading.Thread]
+        self.__communication_thread: typing.Optional[threading.Thread] = None
         self.__communication_thread_terminate = threading.Event()
 
-        self._observer = set()  # type: typing.Set[typing.Callable]
+        self._observer: typing.Set[typing.Callable] = set()
 
         if autostart:
             self.start_communication_thread()
@@ -335,14 +336,14 @@ class Pixtend:
     def add_observer(self, handler: typing.Callable):
         if not isinstance(handler, collections.abc.Hashable):
             raise TypeError("The supplied handler isn't hashable")
-        if not isinstance(handler, collections.abc.Callable):
+        if not callable(handler):
             raise TypeError("The supplied handler isn't callable")
         self._observer.add(handler)
 
     def remove_observer(self, handler: typing.Callable):
         if not isinstance(handler, collections.abc.Hashable):
             raise TypeError("The supplied handler isn't hashable")
-        if not isinstance(handler, collections.abc.Callable):
+        if not callable(handler):
             raise TypeError("The supplied handler isn't callable")
         self._observer.remove(handler)
 
@@ -521,11 +522,11 @@ class Pixtend:
 
     @watchdog.setter
     def watchdog(self, val: PixtendWatchDog):
-        val = int(val)
-        if not (0 <= val <= 10):
+        int_val = int(val)
+        if not (0 <= int_val <= 10):
             raise ValueError('UCCtrl0 / Watchdog has to be between 0 and 10')
         with self.transfer_lock:
-            self._uc_ctrl_0 = val
+            self._uc_ctrl_0 = int_val
 
 
 class PixtendButton(BaseButton):

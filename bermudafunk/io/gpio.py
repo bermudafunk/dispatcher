@@ -1,5 +1,6 @@
 import functools
 import logging
+import typing
 
 import RPi.GPIO
 
@@ -9,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class GPIO:
-    _used_pins = set()
+    _used_pins: typing.Set[int] = set()
     _initialized = False
 
     def __init__(self, pin: int, direction, initial=None, pull_up_down=RPi.GPIO.PUD_OFF):

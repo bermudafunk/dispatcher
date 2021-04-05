@@ -29,8 +29,8 @@ class SymNetRawProtocolCallback:
 class SymNetRawProtocol(asyncio.DatagramProtocol):
     def __init__(self, state_queue: asyncio.Queue):
         logger.debug("init a SymNetRawProtocol")
-        self.transport = None
-        self.callback_queue = []  # type: typing.List[SymNetRawProtocolCallback]
+        self.transport: typing.Optional[asyncio.DatagramTransport] = None
+        self.callback_queue: typing.List[SymNetRawProtocolCallback] = []
         self.state_queue = state_queue
 
     def connection_made(self, transport: asyncio.DatagramTransport):
@@ -106,9 +106,9 @@ class SymNetController:
         self.proto = protocol
 
         self.raw_value = 0
-        self.raw_value_time = 0
+        self.raw_value_time: float = 0
 
-        self.observer = []  # type: typing.List[typing.Callable]
+        self.observer: typing.List[typing.Callable] = []
 
         base.loop.run_until_complete(self._retrieve_current_state().future)
 
@@ -210,16 +210,14 @@ class SymNetButtonController(SymNetController):
 
 
 class SymNetDevice:
-    controllers = ...  # type: typing.Dict[int, SymNetController]
-
     def __init__(self, local_address: typing.Tuple[str, int], remote_address: typing.Tuple[str, int]):
-        self._state_queue = asyncio.Queue(loop=base.loop)
+        self._state_queue: asyncio.Queue = asyncio.Queue(loop=base.loop)
 
         def create_protocol() -> asyncio.DatagramProtocol:
             return SymNetRawProtocol(state_queue=self._state_queue)
 
         logger.debug('setup new symnet device')
-        self.controllers = {}
+        self.controllers: typing.Dict[int, SymNetController] = {}
         connect = base.loop.create_datagram_endpoint(
             create_protocol,
             local_addr=local_address,
@@ -232,7 +230,7 @@ class SymNetDevice:
 
     async def _process_push_messages(self):
         while True:
-            cs = await self._state_queue.get()  # type: SymNetRawControllerState
+            cs: SymNetRawControllerState = await self._state_queue.get()
             logger.debug("received some pushed data - handover to the controller object")
             if cs.controller_number in self.controllers:
                 # noinspection PyProtectedMember

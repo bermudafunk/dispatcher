@@ -40,25 +40,25 @@ async def run(dispatcher: Dispatcher):
         return web.HTTPFound('/static/index.html')
 
     @routes.get('/api/v1/full_state_machine')
-    async def generate_machine_image(_: web.Request) -> web.StreamResponse:
+    async def generate_full_machine_image(_: web.Request) -> web.StreamResponse:
         await bermudafunk.base.loop.run_in_executor(_executor, functools.partial(redraw_complete_graph, dispatcher))
         return web.HTTPFound('/static/full_state_machine.png')
 
     @routes.get('/api/v1/partial_state_machine')
-    async def generate_machine_image(_: web.Request) -> web.StreamResponse:
+    async def generate_partial_machine_image(_: web.Request) -> web.StreamResponse:
         await bermudafunk.base.loop.run_in_executor(_executor, functools.partial(redraw_graph, dispatcher))
         return web.HTTPFound('/static/partial_state_machine.png')
 
     @routes.get('/api/v1/status')
-    async def list_studios(_: web.Request) -> web.StreamResponse:
+    async def dispatcher_status(_: web.Request) -> web.StreamResponse:
         return web.json_response(dispatcher.status, dumps=json.dumps)
 
     @routes.get('/api/v1/studio_lamp_names')
-    async def list_studios(_: web.Request) -> web.StreamResponse:
+    async def studio_lamp_names(_: web.Request) -> web.StreamResponse:
         return web.json_response([studio.name for studio in dispatcher.studios_with_automat], dumps=json.dumps)
 
     @routes.get('/api/v1/studio_names')
-    async def list_studios(_: web.Request) -> web.StreamResponse:
+    async def studio_names(_: web.Request) -> web.StreamResponse:
         return web.json_response([studio.name for studio in dispatcher.studios], dumps=json.dumps)
 
     @routes.get('/api/v1/{studio_name}/press/{button}')

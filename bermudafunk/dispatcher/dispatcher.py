@@ -99,12 +99,12 @@ class Dispatcher:
         self._symnet_controller = symnet_controller
 
         # task holders: The contained task should trigger the corresponding timeout action
-        self._next_hour_timer = None  # type: typing.Optional[asyncio.Task]
-        self._immediate_state_timer = None  # type: typing.Optional[asyncio.Task]
-        self._immediate_release_timer = None  # type: typing.Optional[asyncio.Task]
+        self._next_hour_timer: typing.Optional[asyncio.Task] = None
+        self._immediate_state_timer: typing.Optional[asyncio.Task] = None
+        self._immediate_release_timer: typing.Optional[asyncio.Task] = None
 
         # collecting button presses
-        self._dispatcher_button_event_queue = asyncio.Queue(maxsize=1, loop=base.loop)
+        self._dispatcher_button_event_queue: asyncio.Queue = asyncio.Queue(maxsize=1, loop=base.loop)
 
         # the value of the automat source in the SymNetSelectorController
         assert 1 <= automat.selector_value <= symnet_controller.position_count, "Automat selector value {} have to be in the range of valid selector values [1, {}]".format(
@@ -112,10 +112,10 @@ class Dispatcher:
         self._automat = automat
 
         # studios to switch between and automat
-        self._studios = []  # type: typing.List[BaseStudio]
+        self._studios: typing.List[BaseStudio] = []
         # caching dictionaries to provide lookups
-        self._studios_to_selector_value = {}  # type: typing.Dict[BaseStudio, int]
-        self._selector_value_to_studio = {}  # type: typing.Dict[int, BaseStudio]
+        self._studios_to_selector_value: typing.Dict[BaseStudio, int] = {}
+        self._selector_value_to_studio: typing.Dict[int, BaseStudio] = {}
         for dispatcher_studio in dispatcher_studios:
             assert dispatcher_studio.selector_value not in self._selector_value_to_studio.keys()
             self._studios.append(dispatcher_studio.studio)
@@ -127,7 +127,7 @@ class Dispatcher:
         assert self._automat.studio not in self._studios_to_selector_value.keys(), "A studio has the magic studio name 'automat'"
 
         # on air selector value hold the value we expect to be set in the SymNetSelectorController
-        self.__on_air_selector_value = 0  # type: int
+        self.__on_air_selector_value: int = 0
         self._on_air_selector_value = self._automat.selector_value
 
         # == State machine initialization ==
@@ -135,10 +135,10 @@ class Dispatcher:
         # = State machine values =
         # Studio X
         self.__x = None
-        self._x = None  # type: typing.Optional[Studio]
+        self._x: typing.Optional[Studio] = None
         # Studio Y
         self.__y = None
-        self._y = None  # type: typing.Optional[Studio]
+        self._y: typing.Optional[Studio] = None
 
         states, transitions = load_states_transitions()
 
@@ -174,7 +174,7 @@ class Dispatcher:
                     self._machine.add_transition(trigger=trigger_name, source='noop',
                                                  dest='noop')  # noops to complete all combinations of buttons presses
 
-        self._machine_observers = weakref.WeakSet()  # type: typing.Set[typing.Callable[[Dispatcher], typing.Any]]
+        self._machine_observers: typing.Set[typing.Callable[[Dispatcher, EventData], typing.Any]] = weakref.WeakSet()
 
         self._started = False
 
@@ -192,7 +192,7 @@ class Dispatcher:
 
     def _notify_machine_observers(self, event: EventData):
         for observer in self._machine_observers:
-            observer(self, event=event)
+            observer(self, event)
 
     @property
     def machine_observers(self):
@@ -235,7 +235,7 @@ class Dispatcher:
 
         # check if button event
         if 'button_event' in event.kwargs.keys():
-            button_event = event.kwargs.get('button_event')  # type: ButtonEvent
+            button_event: ButtonEvent = event.kwargs.get('button_event')
             event_name = event.event.name
             # set the studio accordingly
             if 'X' in event_name:
@@ -280,7 +280,7 @@ class Dispatcher:
 
     async def _process_studio_button_events(self):
         while True:
-            event = await self._dispatcher_button_event_queue.get()  # type: ButtonEvent
+            event: ButtonEvent = await self._dispatcher_button_event_queue.get()
             logger.debug('got new event %s, process now', event)
 
             append = None
@@ -314,7 +314,7 @@ class Dispatcher:
     def _assure_lamp_state(self, _: EventData = None):
         """Set the lamp state in studios"""
         logger.debug('assure lamp status')
-        new_lamp_state = self._machine.get_state(self._machine.state).lamp_state_target  # type: LampStateTarget
+        new_lamp_state: LampStateTarget = self._machine.get_state(self._machine.state).lamp_state_target
         self._automat.studio.lamp_state = new_lamp_state.automat
         for studio in self._studios:
             if studio == self._x:

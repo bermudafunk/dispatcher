@@ -23,7 +23,7 @@ class Button(enum.Enum):
 
 
 class BaseStudio:
-    names = {}  # type: typing.Dict[str, 'BaseStudio']
+    names: typing.Dict[str, 'BaseStudio'] = {}
 
     def __init__(
         self,
@@ -39,7 +39,7 @@ class BaseStudio:
         self._main_lamp = main_lamp if main_lamp else DummyTriColorLamp(name="main dummy of " + name)
         self._immediate_lamp = immediate_lamp if immediate_lamp else DummyTriColorLamp(name="immediate dummy of " + name)
 
-        self.dispatcher_button_event_queue = None  # type: typing.Optional[asyncio.Queue]
+        self.dispatcher_button_event_queue: typing.Optional[asyncio.Queue] = None
 
     @property
     def name(self) -> str:
@@ -82,9 +82,9 @@ class Studio(BaseStudio):
         immediate_lamp: BaseTriColorLamp = None,
     ):
         super(Studio, self).__init__(name=name, main_lamp=main_lamp, immediate_lamp=immediate_lamp)
-        self._takeover_button = None  # type: typing.Optional[BaseButton]
-        self._release_button = None  # type: typing.Optional[BaseButton]
-        self._immediate_button = None  # type: typing.Optional[BaseButton]
+        self._takeover_button: typing.Optional[BaseButton] = None
+        self._release_button: typing.Optional[BaseButton] = None
+        self._immediate_button: typing.Optional[BaseButton] = None
 
         self.takeover_button = takeover_button
         self.release_button = release_button
@@ -96,11 +96,11 @@ class Studio(BaseStudio):
         self.immediate_button = None
 
     @property
-    def takeover_button(self) -> BaseButton:
+    def takeover_button(self) -> typing.Optional[BaseButton]:
         return self._takeover_button
 
     @takeover_button.setter
-    def takeover_button(self, new_button: BaseButton):
+    def takeover_button(self, new_button: typing.Optional[BaseButton]):
         if new_button == self._takeover_button:
             return
         if self._takeover_button is not None:
@@ -112,11 +112,11 @@ class Studio(BaseStudio):
             self._takeover_button.add_handler(self.__takeover_button_coroutine)
 
     @property
-    def release_button(self) -> BaseButton:
+    def release_button(self) -> typing.Optional[BaseButton]:
         return self._release_button
 
     @release_button.setter
-    def release_button(self, new_button: BaseButton):
+    def release_button(self, new_button: typing.Optional[BaseButton]):
         if new_button == self._release_button:
             return
         if self._release_button is not None:
@@ -128,11 +128,11 @@ class Studio(BaseStudio):
             self._release_button.add_handler(self.__release_button_coroutine)
 
     @property
-    def immediate_button(self) -> BaseButton:
+    def immediate_button(self) -> typing.Optional[BaseButton]:
         return self._immediate_button
 
     @immediate_button.setter
-    def immediate_button(self, new_button: BaseButton):
+    def immediate_button(self, new_button: typing.Optional[BaseButton]):
         if new_button == self._immediate_button:
             return
         if self._immediate_button is not None:

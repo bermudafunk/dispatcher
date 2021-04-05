@@ -2,6 +2,8 @@ import asyncio
 import logging
 import signal
 
+import typing
+
 import config
 
 loop = asyncio.get_event_loop()
@@ -18,7 +20,7 @@ if config.DEBUG:
 logger = logging.getLogger(__name__)
 
 cleanup_event = asyncio.Event(loop=loop)
-cleanup_tasks = []
+cleanup_tasks: typing.List[asyncio.Task] = []
 
 
 def run_loop():

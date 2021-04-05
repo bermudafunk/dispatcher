@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 class BaseButton(abc.ABC):
     def __init__(self, name: str):
-        self.__trigger = set()  # type: typing.Set[typing.Callable]
+        self.__trigger: typing.Set[typing.Callable] = set()
         self._name = name
 
     @property
@@ -28,14 +28,14 @@ class BaseButton(abc.ABC):
     def add_handler(self, handler: typing.Callable):
         if not isinstance(handler, collections.abc.Hashable):
             raise TypeError("The supplied handler isn't hashable")
-        if not isinstance(handler, collections.abc.Callable):
+        if not callable(handler):
             raise TypeError("The supplied handler isn't callable")
         self.__trigger.add(handler)
 
     def remove_handler(self, handler: typing.Callable):
         if not isinstance(handler, collections.abc.Hashable):
             raise TypeError("The supplied handler isn't hashable")
-        if not isinstance(handler, collections.abc.Callable):
+        if not callable(handler):
             raise TypeError("The supplied handler isn't callable")
         self.__trigger.remove(handler)
 
@@ -89,7 +89,7 @@ class BaseLamp(abc.ABC):
             raise ValueError("This supports only values of {}".format(LampState))
         self._state = state
         self._lock = threading.RLock()
-        self._blinker = None  # type: typing.Optional[Blinker]
+        self._blinker: typing.Optional[Blinker] = None
 
         self._on_callable = on_callable
         self._off_callable = off_callable
