@@ -1,9 +1,9 @@
 from bermudafunk import base
-from bermudafunk.SymNet import SymNetDevice
 from bermudafunk.dispatcher import web
-from bermudafunk.dispatcher.data_types import DispatcherStudioDefinition, Studio, Automat
+from bermudafunk.dispatcher.data_types import Automat, DispatcherStudioDefinition, Studio
 from bermudafunk.dispatcher.dispatcher import Dispatcher
 from bermudafunk.io.pixtend import Pixtend, PixtendTriColorLamp
+from bermudafunk.symnet import SymNetDevice
 
 if __name__ == '__main__':
     base.logger.debug('Main Start')

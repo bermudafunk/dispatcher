@@ -10,8 +10,8 @@ import attr
 from dateutil import tz
 from transitions import EventData, MachineError
 
-import bermudafunk.SymNet
 from bermudafunk import base
+from bermudafunk import symnet
 from bermudafunk.dispatcher.data_types import BaseStudio, Button, ButtonEvent, DispatcherStudioDefinition, Studio
 from bermudafunk.dispatcher.transitions import LampAwareMachine as Machine, LampStateTarget, load_states_transitions
 from bermudafunk.dispatcher.utils import calc_next_hour
@@ -49,14 +49,15 @@ class Dispatcher:
         y: str
         state: str
 
-    def __init__(self,
-                 symnet_controller: bermudafunk.SymNet.SymNetSelectorController,
-                 automat: DispatcherStudioDefinition,
-                 dispatcher_studios: typing.List[DispatcherStudioDefinition],
-                 audit_internal_state=False,
-                 immediate_state_time=300,
-                 immediate_release_time=30
-                 ):
+    def __init__(
+        self,
+        symnet_controller: symnet.SymNetSelectorController,
+        automat: DispatcherStudioDefinition,
+        dispatcher_studios: typing.List[DispatcherStudioDefinition],
+        audit_internal_state=False,
+        immediate_state_time=300,
+        immediate_release_time=30
+    ):
 
         self.file_path = 'state.json'
 
@@ -113,8 +114,11 @@ class Dispatcher:
         self._dispatcher_button_event_queue: asyncio.Queue = asyncio.Queue(maxsize=1, loop=base.loop)
 
         # the value of the automat source in the SymNetSelectorController
-        assert 1 <= automat.selector_value <= symnet_controller.position_count, "Automat selector value {} have to be in the range of valid selector values [1, {}]".format(
-            automat.selector_value, symnet_controller.position_count)
+        if not 1 <= automat.selector_value <= symnet_controller.position_count:
+            raise ValueError(
+                "Automat selector value have to be in the range of valid selector values "
+                f"[1, {symnet_controller.position_count}]: {automat.selector_value} was given"
+            )
         self._automat = automat
 
         # studios to switch between and automat
@@ -129,8 +133,11 @@ class Dispatcher:
             self._selector_value_to_studio[dispatcher_studio.selector_value] = dispatcher_studio.studio
             dispatcher_studio.studio.dispatcher_button_event_queue = self._dispatcher_button_event_queue
 
-        assert self._automat.selector_value not in self._selector_value_to_studio.keys(), "Automat selector value als assigned to a studio"
-        assert self._automat.studio not in self._studios_to_selector_value.keys(), "A studio has the magic studio name 'automat'"
+        if self._automat.selector_value in self._selector_value_to_studio.keys():
+            raise ValueError("Automat selector value als assigned to studio {}".format(
+                self._selector_value_to_studio[self._automat.selector_value].name))
+        if self._automat.studio in self._studios_to_selector_value.keys():
+            raise ValueError("A studio has the magic studio name 'automat'")
 
         # on air selector value hold the value we expect to be set in the SymNetSelectorController
         self.__on_air_selector_value: int = 0
@@ -173,12 +180,12 @@ class Dispatcher:
             self._machine.add_transition(**transition)
 
         # Assure to ignore button presses which are not in any transition
-        for _, button in Button.__members__.items():
+        for button in Button:
             for kind in ['X', 'Y']:
                 trigger_name = button.name + '_' + kind
                 if trigger_name not in self._machine.events.keys():
                     self._machine.add_transition(trigger=trigger_name, source='noop',
-                                                 dest='noop')  # noops to complete all combinations of buttons presses
+                                                 dest='noop')  # noop to complete all combinations of buttons presses
 
         self._machine_observers: typing.Set[typing.Callable[[Dispatcher, EventData], typing.Any]] = weakref.WeakSet()
 

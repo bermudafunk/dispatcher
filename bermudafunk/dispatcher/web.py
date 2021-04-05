@@ -9,7 +9,7 @@ from aiohttp import web
 
 import bermudafunk.base
 from bermudafunk.base import json
-from bermudafunk.dispatcher.data_types import BaseStudio, ButtonEvent, Button
+from bermudafunk.dispatcher.data_types import BaseStudio, Button, ButtonEvent
 from bermudafunk.dispatcher.dispatcher import Dispatcher
 
 logger = logging.getLogger(__name__)

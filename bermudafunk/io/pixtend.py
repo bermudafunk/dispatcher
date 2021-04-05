@@ -14,8 +14,8 @@ import typing
 import prometheus_client
 import spidev
 
-from bermudafunk.base import loop, cleanup_event
-from bermudafunk.io.common import LampState, BaseButton, BaseLamp, BaseTriColorLamp, TriColorLampColor
+from bermudafunk.base import cleanup_event, loop
+from bermudafunk.io.common import BaseButton, BaseLamp, BaseTriColorLamp, LampState, TriColorLampColor
 from bermudafunk.io.gpio import GPIOLamp as GPIOOutput
 
 logger = logging.getLogger(__name__)

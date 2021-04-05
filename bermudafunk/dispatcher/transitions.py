@@ -7,7 +7,7 @@ from transitions import State
 from transitions.extensions.diagrams import GraphMachine
 
 from bermudafunk.dispatcher.data_types import StudioLampState, triggers
-from bermudafunk.io.common import TriColorLampState, LampState, TriColorLampColor
+from bermudafunk.io.common import LampState, TriColorLampColor, TriColorLampState
 
 logger = logging.getLogger(__name__)
 
