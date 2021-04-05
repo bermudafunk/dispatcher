@@ -155,10 +155,10 @@ class TriColorLampColor(enum.Flag):
         return '{}.{}'.format(type(self).__name__, self.name)
 
 
-@attr.frozen
+@attr.s(frozen=True)
 class TriColorLampState:
-    state: LampState = attr.field(validator=attr.validators.in_(LampState))
-    color: TriColorLampColor = attr.field(validator=attr.validators.in_(TriColorLampColor))
+    state: LampState = attr.ib(validator=attr.validators.in_(LampState))
+    color: TriColorLampColor = attr.ib(validator=attr.validators.in_(TriColorLampColor))
 
 
 class BaseTriColorLamp(BaseLamp):

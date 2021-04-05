@@ -33,7 +33,7 @@ class SymNetRawProtocol(asyncio.DatagramProtocol):
         self.callback_queue = []  # type: typing.List[SymNetRawProtocolCallback]
         self.state_queue = state_queue
 
-    def connection_made(self, transport: asyncio.BaseTransport):
+    def connection_made(self, transport: asyncio.DatagramTransport):
         logger.debug("connection established")
         self.transport = transport
 
@@ -188,69 +188,6 @@ class SymNetSelectorController(SymNetController):
         assert 1 <= position <= self.position_count
         self._set_raw_value(int(round((position - 1) / (self.position_count - 1) * 65535)))
         await self._assure_current_state().future
-
-
-class SymNetSelectorControllerDummy(SymNetSelectorController):
-    def __init__(self, controller_number: int, position_cont: int):
-        logger.debug('create new SymNetSelectorControllerDummy with %d', controller_number)
-        self._position_count = int(position_cont)
-        self.controller_number = int(controller_number)
-
-        self.raw_value = 0
-        self.raw_value_time = 0
-
-        self.observer = []  # type: typing.List[typing.Callable]
-
-    def add_observer(self, callback: typing.Callable):
-        logger.debug("add a observer (%s) to controller %d", callback, self.controller_number)
-        return self.observer.append(callback)
-
-    def remove_observer(self, callback: typing.Callable):
-        logger.debug("remove a observer (%s) to controller %d", callback, self.controller_number)
-        return self.observer.remove(callback)
-
-    async def _get_raw_value(self) -> int:
-        logger.debug('retrieve current value for controller %d', self.controller_number)
-        return self.raw_value
-
-    def _set_raw_value(self, value: int):
-        logger.debug('set_raw_value called on %d with %d', self.controller_number, value)
-        old_value = self.raw_value
-        self.raw_value = value
-        self.raw_value_time = base.loop.time()
-        if old_value != value:
-            logger.debug("value has changed - notify observers")
-            for clb in self.observer:
-                base.loop.create_task(clb(self, old_value=old_value, new_value=value))
-
-    def _assure_current_state(self):
-        raise NotImplementedError("Dummy implementation")
-
-    def _assure_callback(self, _, m=None):
-        raise NotImplementedError("Dummy implementation")
-
-    def _retrieve_current_state(self):
-        logger.debug("request current value from the symnet device for controller %d", self.controller_number)
-        callback_obj = SymNetRawProtocolCallback(
-            callback=self._retrieve_callback,
-            expected_lines=1,
-            regex='^' + str(self.controller_number) + ' ([0-9]{1,5})\r$'
-        )
-        self.proto.callback_queue.append(callback_obj)
-        self.proto.write('GS2 {:d}\r'.format(self.controller_number))
-        return callback_obj
-
-    def _retrieve_callback(self, _, m=None):
-        if m is None:
-            raise Exception('Error executing GS2 command, controller {}'.format(self.controller_number))
-        self._set_raw_value(int(m.group(1)))
-
-    async def get_position(self):
-        return int(round(await self._get_raw_value() / 65535 * (self.position_count - 1) + 1))
-
-    async def set_position(self, position: int):
-        assert 1 <= position <= self.position_count
-        self._set_raw_value(int(round((position - 1) / (self.position_count - 1) * 65535)))
 
 
 class SymNetButtonController(SymNetController):

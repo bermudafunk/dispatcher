@@ -9,10 +9,10 @@ from bermudafunk.io.common import BaseButton, BaseTriColorLamp, TriColorLampStat
 from bermudafunk.io.dummy import DummyTriColorLamp
 
 
-@attr.frozen
+@attr.s(frozen=True)
 class StudioLampState:
-    main: TriColorLampState = attr.field(validator=attr.validators.instance_of(TriColorLampState))
-    immediate: TriColorLampState = attr.field(validator=attr.validators.instance_of(TriColorLampState))
+    main: TriColorLampState = attr.ib(validator=attr.validators.instance_of(TriColorLampState))
+    immediate: TriColorLampState = attr.ib(validator=attr.validators.instance_of(TriColorLampState))
 
 
 @enum.unique
@@ -23,7 +23,7 @@ class Button(enum.Enum):
 
 
 class BaseStudio:
-    names = {}  # type: typing.Dict[str, BaseStudio]
+    names = {}  # type: typing.Dict[str, 'BaseStudio']
 
     def __init__(
         self,
@@ -34,7 +34,7 @@ class BaseStudio:
         self._name = name
         if name in BaseStudio.names.keys():
             raise ValueError('name already used %s' % name)
-        Studio.names[name] = self
+        BaseStudio.names[name] = self
 
         self._main_lamp = main_lamp if main_lamp else DummyTriColorLamp(name="main dummy of " + name)
         self._immediate_lamp = immediate_lamp if immediate_lamp else DummyTriColorLamp(name="immediate dummy of " + name)
@@ -157,16 +157,16 @@ class Studio(BaseStudio):
         return '<Studio: name=%s>' % self.name
 
 
-@attr.frozen
+@attr.s(frozen=True)
 class DispatcherStudioDefinition:
-    studio: BaseStudio = attr.field(validator=attr.validators.instance_of(BaseStudio))
-    selector_value: int = attr.field(validator=attr.validators.instance_of(int))
+    studio: BaseStudio = attr.ib(validator=attr.validators.instance_of(BaseStudio))
+    selector_value: int = attr.ib(validator=attr.validators.instance_of(int))
 
 
-@attr.frozen
+@attr.s(frozen=True)
 class ButtonEvent:
-    studio: Studio = attr.field(validator=attr.validators.instance_of(Studio))
-    button: Button = attr.field(validator=attr.validators.instance_of(Button))
+    studio: Studio = attr.ib(validator=attr.validators.instance_of(Studio))
+    button: Button = attr.ib(validator=attr.validators.instance_of(Button))
 
 
 triggers = {"next_hour", "immediate_state_timeout", "immediate_release_timeout"} | set(
