@@ -59,6 +59,7 @@ class LampState(enum.Enum):
     ON = 0
     BLINK = 2
     BLINK_FAST = 4
+    ANIMATION = 0
 
     def __new__(cls, frequency: float):
         value = len(cls.__members__) + 1
@@ -157,8 +158,8 @@ class TriColorLampColor(enum.Flag):
 
 @attr.s(frozen=True, slots=True)
 class TriColorLampState:
-    state: LampState = attr.ib(validator=attr.validators.in_(LampState))
-    color: TriColorLampColor = attr.ib(validator=attr.validators.in_(TriColorLampColor))
+    state: LampState = attr.ib(validator=attr.validators.instance_of(LampState))
+    color: TriColorLampColor = attr.ib(validator=attr.validators.instance_of(TriColorLampColor))
 
 
 class BaseTriColorLamp(BaseLamp):
