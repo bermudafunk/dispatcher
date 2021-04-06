@@ -10,7 +10,7 @@ from bermudafunk import base
 logger = logging.getLogger(__name__)
 
 
-@attr.s(frozen=True)
+@attr.s(frozen=True, slots=True)
 class SymNetRawControllerState:
     controller_number: int = attr.ib(converter=int, validator=attr.validators.instance_of(int))
     controller_value: int = attr.ib(converter=int, validator=attr.validators.instance_of(int))

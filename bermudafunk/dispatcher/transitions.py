@@ -15,7 +15,7 @@ GraphMachine.style_attributes['node']['default']['shape'] = 'octagon'
 GraphMachine.style_attributes['node']['active']['shape'] = 'doubleoctagon'
 
 
-@attr.s(frozen=True)
+@attr.s(frozen=True, slots=True)
 class LampStateTarget:
     automat: StudioLampState = attr.ib(validator=attr.validators.instance_of(StudioLampState))
     x: StudioLampState = attr.ib(validator=attr.validators.instance_of(StudioLampState))

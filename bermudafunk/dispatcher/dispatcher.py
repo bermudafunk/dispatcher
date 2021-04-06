@@ -43,7 +43,7 @@ class Dispatcher:
     The timers are not reset if the name of the timer is in both src and dest state name.
     """
 
-    @attr.s(frozen=True, auto_attribs=True)
+    @attr.s(frozen=True, slots=True, auto_attribs=True)
     class _SaveState:
         x: str
         y: str

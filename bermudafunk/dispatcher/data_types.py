@@ -9,7 +9,7 @@ from bermudafunk.io.common import BaseButton, BaseTriColorLamp, TriColorLampStat
 from bermudafunk.io.dummy import DummyTriColorLamp
 
 
-@attr.s(frozen=True)
+@attr.s(frozen=True, slots=True)
 class StudioLampState:
     main: TriColorLampState = attr.ib(validator=attr.validators.instance_of(TriColorLampState))
     immediate: TriColorLampState = attr.ib(validator=attr.validators.instance_of(TriColorLampState))
@@ -157,13 +157,13 @@ class Studio(BaseStudio):
         return '<Studio: name=%s>' % self.name
 
 
-@attr.s(frozen=True)
+@attr.s(frozen=True, slots=True)
 class DispatcherStudioDefinition:
     studio: BaseStudio = attr.ib(validator=attr.validators.instance_of(BaseStudio))
     selector_value: int = attr.ib(validator=attr.validators.instance_of(int))
 
 
-@attr.s(frozen=True)
+@attr.s(frozen=True, slots=True)
 class ButtonEvent:
     studio: Studio = attr.ib(validator=attr.validators.instance_of(Studio))
     button: Button = attr.ib(validator=attr.validators.instance_of(Button))
