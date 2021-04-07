@@ -13,7 +13,7 @@ logging.getLogger('transitions').setLevel(logging.INFO)
 
 if config.DEBUG:
     logging.getLogger('bermudafunk').setLevel(logging.DEBUG)
-    logging.getLogger('bermudafunk.SymNet').setLevel(logging.ERROR)
+    logging.getLogger('bermudafunk.symnet').setLevel(logging.ERROR)
     logging.getLogger('transitions').setLevel(logging.DEBUG)
 
 logger = logging.getLogger(__name__)
