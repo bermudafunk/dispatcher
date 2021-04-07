@@ -2,11 +2,22 @@ import asyncio
 import logging
 import signal
 import typing
+from concurrent.futures.thread import ThreadPoolExecutor
 
 import config
 
 loop = asyncio.get_event_loop()
 loop.set_debug(config.DEBUG)
+loop.set_default_executor(ThreadPoolExecutor(thread_name_prefix='AsyncioLoopDefaultExecutor'))
+
+
+def exception_handler(exception_loop: asyncio.AbstractEventLoop, context):
+    if 'exception' in context and isinstance(context['exception'], asyncio.CancelledError):
+        return
+    exception_loop.default_exception_handler(context)
+
+
+loop.set_exception_handler(exception_handler)
 
 logging.basicConfig(format='%(asctime)s : %(levelname)8s : %(name)30s : %(funcName)-20s : %(lineno)4d : %(message)s')
 logging.getLogger('transitions').setLevel(logging.INFO)
