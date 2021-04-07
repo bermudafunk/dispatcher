@@ -2,7 +2,7 @@ from bermudafunk import base
 from bermudafunk.dispatcher import web
 from bermudafunk.dispatcher.data_types import Automat, DispatcherStudioDefinition, Studio
 from bermudafunk.dispatcher.dispatcher import Dispatcher
-from bermudafunk.io.pixtend import Pixtend, PixtendTriColorLamp
+from bermudafunk.io.pixtend import Pixtend, PixtendButton, PixtendTriColorLamp
 from bermudafunk.symnet import SymNetDevice
 
 if __name__ == '__main__':
@@ -39,6 +39,21 @@ if __name__ == '__main__':
             channel_1=8,
             channel_2=9,
         ),
+        release_button=PixtendButton(
+            name='Alte Feuerwache 1 Freigeben',
+            pixtend=pixtend,
+            channel=0,
+        ),
+        takeover_button=PixtendButton(
+            name='Alte Feuerwache 1 Übernahme',
+            pixtend=pixtend,
+            channel=1,
+        ),
+        immediate_button=PixtendButton(
+            name='Alte Feuerwache 1 Sofort',
+            pixtend=pixtend,
+            channel=2,
+        )
     )
     af_2 = Studio(
         name='AlteFeuerwache2',
@@ -53,6 +68,21 @@ if __name__ == '__main__':
             pixtend=pixtend,
             channel_1=10,
             channel_2=11,
+        ),
+        release_button=PixtendButton(
+            name='Alte Feuerwache 2 Freigeben',
+            pixtend=pixtend,
+            channel=4,
+        ),
+        takeover_button=PixtendButton(
+            name='Alte Feuerwache 2 Übernahme',
+            pixtend=pixtend,
+            channel=5,
+        ),
+        immediate_button=PixtendButton(
+            name='Alte Feuerwache 2 Sofort',
+            pixtend=pixtend,
+            channel=6,
         ),
     )
     af_3 = Studio(
