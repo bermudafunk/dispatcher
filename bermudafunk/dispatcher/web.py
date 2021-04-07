@@ -1,20 +1,21 @@
 import asyncio
 import functools
 import logging
+import threading
 import weakref
 from concurrent.futures import ThreadPoolExecutor
 
 import aiohttp
 from aiohttp import web
 
-import bermudafunk.base
+from bermudafunk import base
 from bermudafunk.base import json
 from bermudafunk.dispatcher.data_types import BaseStudio, Button, ButtonEvent
 from bermudafunk.dispatcher.dispatcher import Dispatcher
 
 logger = logging.getLogger(__name__)
 
-_executor = ThreadPoolExecutor(max_workers=2)
+_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='GraphRenderer')
 _websockets = weakref.WeakSet()
 
 
@@ -39,14 +40,18 @@ async def run(dispatcher: Dispatcher):
     async def redirect_to_static_html(_: web.Request) -> web.StreamResponse:
         return web.HTTPFound('/static/index.html')
 
+    @routes.get('/threads')
+    async def thread_names(_: web.Request) -> web.StreamResponse:
+        return web.json_response([thread.name for thread in threading.enumerate()])
+
     @routes.get('/api/v1/full_state_machine')
     async def generate_full_machine_image(_: web.Request) -> web.StreamResponse:
-        await bermudafunk.base.loop.run_in_executor(_executor, functools.partial(redraw_complete_graph, dispatcher))
+        await base.loop.run_in_executor(None, functools.partial(redraw_complete_graph, dispatcher))
         return web.HTTPFound('/static/full_state_machine.png')
 
     @routes.get('/api/v1/partial_state_machine')
     async def generate_partial_machine_image(_: web.Request) -> web.StreamResponse:
-        await bermudafunk.base.loop.run_in_executor(_executor, functools.partial(redraw_graph, dispatcher))
+        await base.loop.run_in_executor(None, functools.partial(redraw_graph, dispatcher))
         return web.HTTPFound('/static/partial_state_machine.png')
 
     @routes.get('/api/v1/status')
@@ -148,8 +153,8 @@ async def run(dispatcher: Dispatcher):
     site = web.TCPSite(runner, '192.168.96.42', 8080)
     await site.start()
     dispatcher.machine_observers.add(observer)
-    observer_push_task = bermudafunk.base.loop.create_task(observer_push())
-    await bermudafunk.base.cleanup_event.wait()
+    observer_push_task = base.loop.create_task(observer_push())
+    await base.cleanup_event.wait()
     observer_push_task.cancel()
     await close_remaining_websockets()
     logger.debug('closed remaining websockets')
