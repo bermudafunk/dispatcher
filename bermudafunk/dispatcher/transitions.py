@@ -144,4 +144,4 @@ def check_states_ignore_immediate_lamp(states):
         )
     for state1, state2 in itertools.combinations(modified_states.keys(), 2):
         if modified_states[state1] == modified_states[state2]:
-            logger.warn("Duplicate lamp state ignoring immediate on states {} & {}".format(state1, state2))
+            logger.warning("Duplicate lamp state ignoring immediate on states {} & {}".format(state1, state2))
