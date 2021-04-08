@@ -1,3 +1,4 @@
 name,timeout_seconds
 immediate_state,300
 immediate_release,30
+immediate_takeover,15
