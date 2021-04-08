@@ -3,6 +3,7 @@ import logging
 from typing import Dict, List, Tuple
 
 import attr
+import pandas
 from transitions import State
 from transitions.extensions.diagrams import GraphMachine
 
@@ -38,16 +39,29 @@ class LampAwareMachine(GraphMachine):
 
 
 def load_timers_states_transitions() -> Tuple[Dict[str, float], Dict[str, LampAwareState], List[Dict]]:
-    import pandas
+    timers = load_timers()
 
+    states = load_states()
+
+    transitions = load_transitions(states, timers)
+
+    return timers, states, transitions
+
+
+def load_timers():
     timers_data = pandas.read_csv("transitions_data/timers.csv", converters={"name": str, "timeout_seconds": float})
     timers = {}
     for _, timer_data in timers_data.iterrows():
         timers[timer_data["name"]] = timer_data["timeout_seconds"]
+    for timer1, timer2 in itertools.combinations(timers.keys(), 2):
+        assert timer1 not in timer2, f"{timer1} is a substring of {timer2}"
+        assert timer2 not in timer1, f"{timer2} is a substring of {timer1}"
+    return timers
 
+
+def load_states():
     states_data = pandas.read_csv("transitions_data/states.csv")
     states = {}
-
     for _, state_data in states_data.iterrows():
         name = state_data["name"]
         lamp_state_target = LampStateTarget(
@@ -100,27 +114,24 @@ def load_timers_states_transitions() -> Tuple[Dict[str, float], Dict[str, LampAw
         if state.name in states:
             raise ValueError("Duplicate state name {}".format(state.name))
         states[state.name] = state
-
     assert len(states_data["name"]) == len(set(n.lower() for n in states_data["name"])), "duplicate state names"
     assert len(states) == len(set(s.lamp_state_target for s in states.values())), "duplicate lamp state targets"
-
     check_states_ignore_immediate_lamp(states)
+    return states
 
+
+def load_transitions(states, timers):
     transitions_data = pandas.read_csv("transitions_data/transitions.csv", converters={"switch_xy": bool})
     transitions = transitions_data.to_dict(orient="records")
-
     triggers = {"next_hour"} | set(
         ("{}_{}".format(button.value, studio) for button in data_types.Button for studio in ("X", "Y", "other"))
     ) | {f"{timer}_timeout" for timer in timers}
-
     for transition in transitions:
         transition["source"] = states[transition["source"]]
         transition["dest"] = states[transition["dest"]]
-
     assert triggers >= set(transition["trigger"] for transition in transitions), "unknown trigger"
     assert len(transitions) == len(set((t["trigger"], t["source"]) for t in transitions)), "duplicate actions"
-
-    return timers, states, transitions
+    return transitions
 
 
 def check_states_ignore_immediate_lamp(states):
