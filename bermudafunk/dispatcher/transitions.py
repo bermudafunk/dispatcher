@@ -24,7 +24,7 @@ class LampStateTarget:
 
 
 class LampAwareState(State):
-    def __init__(self, name, lamp_state_target: LampStateTarget, on_enter=None, on_exit=None, ignore_invalid_triggers=False):
+    def __init__(self, name, lamp_state_target: LampStateTarget, on_enter=None, on_exit=None, ignore_invalid_triggers=None):
         super().__init__(name=name, on_enter=on_enter, on_exit=on_exit, ignore_invalid_triggers=ignore_invalid_triggers)
         self._lamp_state_target = lamp_state_target
 
@@ -107,16 +107,8 @@ def load_timers_states_transitions() -> Tuple[Dict[str, float], Dict[str, LampAw
     transitions = transitions_data.to_dict(orient="records")
 
     triggers = {"next_hour"} | set(
-        ("{}_{}".format(button.value, studio) for button in data_types.Button for studio in ("X", "Y"))
+        ("{}_{}".format(button.value, studio) for button in data_types.Button for studio in ("X", "Y", "other"))
     ) | {f"{timer}_timeout" for timer in timers}
-
-    # Assure to ignore button presses which are not in any transition
-    for trigger in triggers:
-        if trigger not in [transition["trigger"] for transition in transitions]:
-            transitions.append({
-                "trigger": trigger,
-                "source": "noop",
-                "dest": "noop"})  # noop to complete all combinations of buttons presses
 
     for transition in transitions:
         transition["source"] = states[transition["source"]]

@@ -158,7 +158,6 @@ class Dispatcher:
         self._machine = Machine(
             states=list(states.values()),
             initial=states['automat_on_air'],
-            ignore_invalid_triggers=True,
             send_event=True,
             before_state_change=[self._before_state_change],
             after_state_change=[self._after_state_change],
@@ -282,30 +281,25 @@ class Dispatcher:
             event: ButtonEvent = await self._dispatcher_button_event_queue.get()
             logger.debug('got new event %s, process now', event)
 
-            append = None
-            if self._x is None:  # if no studio is active, it's always the X / first studio
+            # a studio is active, to be the X event the button has to be pressed in the X studio
+            if self._x is None or self._x == event.studio:
                 append = '_X'
+            elif self._y is None or self._y == event.studio:
+                append = '_Y'
             else:
-                # a studio is active, to be the X event the button has to be pressed in the X studio
-                if self._x == event.studio:
-                    append = '_X'
-                else:
-                    # else no second studio is currently in the active state
-                    # or the second studio is pressing a button
-                    if self._y is None or self._y == event.studio:
-                        append = '_Y'
+                append = '_other'
 
             # if the button press can be mapped to a studio trigger the machine
-            if append:
-                trigger_name = event.button.name + append
-                logger.debug('state %s', {'state': self._machine.state, 'x': self._x, 'y': self._y})
-                logger.debug('trigger_name trying to call %s', trigger_name)
-                try:
-                    self._machine.trigger(trigger_name, button_event=event)
-                except MachineError as e:
-                    logger.info(e)
-                    # TODO: Signal error
-                    pass
+            trigger_name = event.button.name + append
+            logger.debug('state %s', {'state': self._machine.state, 'x': self._x, 'y': self._y})
+            logger.debug('trigger_name trying to call %s', trigger_name)
+            # noinspection PyBroadException
+            try:
+                self._machine.trigger(trigger_name, button_event=event)
+            except:
+                logger.critical("Unable to process trigger %s", trigger_name)
+                # TODO: Signal error
+                pass
 
             self._audit_state()
             self._assure_lamp_state()
