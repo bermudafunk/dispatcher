@@ -12,8 +12,8 @@ from transitions import EventData, MachineError
 
 from bermudafunk import base
 from bermudafunk import symnet
-from bermudafunk.dispatcher.data_types import BaseStudio, Button, ButtonEvent, DispatcherStudioDefinition, Studio
-from bermudafunk.dispatcher.transitions import LampAwareMachine as Machine, LampStateTarget, load_states_transitions
+from bermudafunk.dispatcher.data_types import BaseStudio, ButtonEvent, DispatcherStudioDefinition, Studio
+from bermudafunk.dispatcher.transitions import LampAwareMachine as Machine, LampStateTarget, load_timers_states_transitions
 from bermudafunk.dispatcher.utils import calc_next_hour
 
 logger = logging.getLogger(__name__)
@@ -98,13 +98,6 @@ class Dispatcher:
             Dispatcher._y = property(_y_get, _y_set)
             Dispatcher._on_air_selector_value = property(_on_air_selector_value_get, _on_air_selector_value_set)
 
-        # Timers
-        self._timers = {
-            'immediate_state': 300,
-            'immediate_release': 30,
-        }
-        self._timer_tasks = {}
-
         self._symnet_controller = symnet_controller
 
         # task holders: The contained task should trigger the corresponding timeout action
@@ -155,7 +148,8 @@ class Dispatcher:
         self.__y = None
         self._y: typing.Optional[Studio] = None
 
-        states, transitions = load_states_transitions()
+        self._timer_tasks: typing.Dict[str, asyncio.Task] = {}
+        self._timers, states, transitions = load_timers_states_transitions()
 
         states['automat_on_air'].add_callback('enter', self._change_to_automat)
         states['studio_X_on_air'].add_callback('enter', self._change_to_studio)
@@ -180,18 +174,6 @@ class Dispatcher:
                     transition['before'].append(self._prepare_y_to_x)
                 del transition['y_to_x']
             self._machine.add_transition(**transition)
-
-        # Assure to ignore button presses which are not in any transition
-        triggers = [f'{timer}_timeout' for timer in self._timers]
-        for button in Button:
-            for kind in ['X', 'Y']:
-                triggers.append(button.name + '_' + kind)
-        for trigger in triggers:
-            if trigger not in self._machine.events.keys():
-                self._machine.add_transition(
-                    trigger=trigger,
-                    source='noop',
-                    dest='noop')  # noop to complete all combinations of buttons presses
 
         self._machine_observers: typing.Set[typing.Callable[[Dispatcher, EventData], typing.Any]] = weakref.WeakSet()
 

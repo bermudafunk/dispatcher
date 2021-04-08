@@ -163,7 +163,3 @@ class ButtonEvent:
     studio: Studio = attr.ib(validator=attr.validators.instance_of(Studio))
     button: Button = attr.ib(validator=attr.validators.instance_of(Button))
 
-
-triggers = {"next_hour", "immediate_state_timeout", "immediate_release_timeout"} | set(
-    ("{}_{}".format(button.value, studio) for button in Button for studio in ("X", "Y"))
-)

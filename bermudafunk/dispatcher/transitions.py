@@ -1,25 +1,26 @@
 import itertools
 import logging
+from typing import Dict, List, Tuple
 
 import attr
 from transitions import State
 from transitions.extensions.diagrams import GraphMachine
 
-from bermudafunk.dispatcher.data_types import StudioLampState, triggers
-from bermudafunk.io.common import LampState, TriColorLampColor, TriColorLampState
+from bermudafunk.dispatcher import data_types
+from bermudafunk.io import common
 
 logger = logging.getLogger(__name__)
 
-GraphMachine.style_attributes['node']['default']['shape'] = 'octagon'
-GraphMachine.style_attributes['node']['active']['shape'] = 'doubleoctagon'
+GraphMachine.style_attributes["node"]["default"]["shape"] = "octagon"
+GraphMachine.style_attributes["node"]["active"]["shape"] = "doubleoctagon"
 
 
 @attr.s(frozen=True, slots=True)
 class LampStateTarget:
-    automat: StudioLampState = attr.ib(validator=attr.validators.instance_of(StudioLampState))
-    x: StudioLampState = attr.ib(validator=attr.validators.instance_of(StudioLampState))
-    y: StudioLampState = attr.ib(validator=attr.validators.instance_of(StudioLampState))
-    other: StudioLampState = attr.ib(validator=attr.validators.instance_of(StudioLampState))
+    automat: data_types.StudioLampState = attr.ib(validator=attr.validators.instance_of(data_types.StudioLampState))
+    x: data_types.StudioLampState = attr.ib(validator=attr.validators.instance_of(data_types.StudioLampState))
+    y: data_types.StudioLampState = attr.ib(validator=attr.validators.instance_of(data_types.StudioLampState))
+    other: data_types.StudioLampState = attr.ib(validator=attr.validators.instance_of(data_types.StudioLampState))
 
 
 class LampAwareState(State):
@@ -36,8 +37,14 @@ class LampAwareMachine(GraphMachine):
     state_cls = LampAwareState
 
 
-def load_states_transitions():
+def load_timers_states_transitions() -> Tuple[Dict[str, float], Dict[str, LampAwareState], List[Dict]]:
     import pandas
+
+    timers_data = pandas.read_csv("transitions_data/timers.csv", converters={"name": str, "timeout_seconds": float})
+    timers = {}
+    for _, timer_data in timers_data.iterrows():
+        timers[timer_data["name"]] = timer_data["timeout_seconds"]
+
     states_data = pandas.read_csv("transitions_data/states.csv")
     states = {}
 
@@ -45,44 +52,44 @@ def load_states_transitions():
         state = LampAwareState(
             name=state_data["state"],
             lamp_state_target=LampStateTarget(
-                automat=StudioLampState(
-                    main=TriColorLampState(
-                        state=LampState[state_data["automat_main_state"].upper()],
-                        color=TriColorLampColor[state_data["automat_main_color"].upper()],
+                automat=data_types.StudioLampState(
+                    main=common.TriColorLampState(
+                        state=common.LampState[state_data["automat_main_state"].upper()],
+                        color=common.TriColorLampColor[state_data["automat_main_color"].upper()],
                     ),
-                    immediate=TriColorLampState(
-                        state=LampState.OFF,
-                        color=TriColorLampColor.NONE,
+                    immediate=common.TriColorLampState(
+                        state=common.LampState.OFF,
+                        color=common.TriColorLampColor.NONE,
                     )
                 ),
-                x=StudioLampState(
-                    main=TriColorLampState(
-                        state=LampState[state_data["x_main_state"].upper()],
-                        color=TriColorLampColor[state_data["x_main_color"].upper()],
+                x=data_types.StudioLampState(
+                    main=common.TriColorLampState(
+                        state=common.LampState[state_data["x_main_state"].upper()],
+                        color=common.TriColorLampColor[state_data["x_main_color"].upper()],
                     ),
-                    immediate=TriColorLampState(
-                        state=LampState[state_data["x_immediate_state"].upper()],
-                        color=TriColorLampColor[state_data["x_immediate_color"].upper()],
-                    ),
-                ),
-                y=StudioLampState(
-                    main=TriColorLampState(
-                        state=LampState[state_data["y_main_state"].upper()],
-                        color=TriColorLampColor[state_data["y_main_color"].upper()],
-                    ),
-                    immediate=TriColorLampState(
-                        state=LampState[state_data["y_immediate_state"].upper()],
-                        color=TriColorLampColor[state_data["y_immediate_color"].upper()],
+                    immediate=common.TriColorLampState(
+                        state=common.LampState[state_data["x_immediate_state"].upper()],
+                        color=common.TriColorLampColor[state_data["x_immediate_color"].upper()],
                     ),
                 ),
-                other=StudioLampState(
-                    main=TriColorLampState(
-                        state=LampState[state_data["other_main_state"].upper()],
-                        color=TriColorLampColor[state_data["other_main_color"].upper()],
+                y=data_types.StudioLampState(
+                    main=common.TriColorLampState(
+                        state=common.LampState[state_data["y_main_state"].upper()],
+                        color=common.TriColorLampColor[state_data["y_main_color"].upper()],
                     ),
-                    immediate=TriColorLampState(
-                        state=LampState[state_data["other_immediate_state"].upper()],
-                        color=TriColorLampColor[state_data["other_immediate_color"].upper()],
+                    immediate=common.TriColorLampState(
+                        state=common.LampState[state_data["y_immediate_state"].upper()],
+                        color=common.TriColorLampColor[state_data["y_immediate_color"].upper()],
+                    ),
+                ),
+                other=data_types.StudioLampState(
+                    main=common.TriColorLampState(
+                        state=common.LampState[state_data["other_main_state"].upper()],
+                        color=common.TriColorLampColor[state_data["other_main_color"].upper()],
+                    ),
+                    immediate=common.TriColorLampState(
+                        state=common.LampState[state_data["other_immediate_state"].upper()],
+                        color=common.TriColorLampColor[state_data["other_immediate_color"].upper()],
                     ),
                 ),
             )
@@ -98,13 +105,27 @@ def load_states_transitions():
 
     transitions_data = pandas.read_csv("transitions_data/transitions.csv", converters={"y_to_x": bool})
     transitions = transitions_data.to_dict(orient="records")
+
+    triggers = {"next_hour"} | set(
+        ("{}_{}".format(button.value, studio) for button in data_types.Button for studio in ("X", "Y"))
+    ) | {f"{timer}_timeout" for timer in timers}
+
+    # Assure to ignore button presses which are not in any transition
+    for trigger in triggers:
+        if trigger not in [transition["trigger"] for transition in transitions]:
+            transitions.append({
+                "trigger": trigger,
+                "source": "noop",
+                "dest": "noop"})  # noop to complete all combinations of buttons presses
+
     for transition in transitions:
-        transition['source'] = states[transition['source']]
-        transition['dest'] = states[transition['dest']]
+        transition["source"] = states[transition["source"]]
+        transition["dest"] = states[transition["dest"]]
+
     assert triggers >= set(transition["trigger"] for transition in transitions), "unknown trigger"
     assert len(transitions) == len(set((t["trigger"], t["source"]) for t in transitions)), "duplicate actions"
 
-    return states, transitions
+    return timers, states, transitions
 
 
 def check_states_ignore_immediate_lamp(states):
@@ -115,30 +136,30 @@ def check_states_ignore_immediate_lamp(states):
             lst,
             automat=attr.evolve(
                 lst.automat,
-                immediate=TriColorLampState(
-                    state=LampState.OFF,
-                    color=TriColorLampColor.NONE,
+                immediate=common.TriColorLampState(
+                    state=common.LampState.OFF,
+                    color=common.TriColorLampColor.NONE,
                 )
             ),
             x=attr.evolve(
                 lst.x,
-                immediate=TriColorLampState(
-                    state=LampState.OFF,
-                    color=TriColorLampColor.NONE,
+                immediate=common.TriColorLampState(
+                    state=common.LampState.OFF,
+                    color=common.TriColorLampColor.NONE,
                 )
             ),
             y=attr.evolve(
                 lst.y,
-                immediate=TriColorLampState(
-                    state=LampState.OFF,
-                    color=TriColorLampColor.NONE,
+                immediate=common.TriColorLampState(
+                    state=common.LampState.OFF,
+                    color=common.TriColorLampColor.NONE,
                 )
             ),
             other=attr.evolve(
                 lst.other,
-                immediate=TriColorLampState(
-                    state=LampState.OFF,
-                    color=TriColorLampColor.NONE,
+                immediate=common.TriColorLampState(
+                    state=common.LampState.OFF,
+                    color=common.TriColorLampColor.NONE,
                 )
             )
         )
