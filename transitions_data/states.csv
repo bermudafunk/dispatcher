@@ -1,0 +1,11 @@
+state,automat_main_state,automat_main_color,x_main_state,x_main_color,x_immediate_state,x_immediate_color,y_main_state,y_main_color,y_immediate_state,y_immediate_color,other_main_state,other_main_color,other_immediate_state,other_immediate_color
+automat_on_air,on,green,off,none,off,none,off,none,off,none,off,none,off,none
+automat_on_air_immediate_state_X,on,green,off,none,on,red,off,none,off,none,off,none,on,yellow
+from_automat_on_air_change_to_studio_X_on_next_hour,on,green,blink,green,off,none,off,none,off,none,off,none,off,none
+studio_X_on_air,off,none,on,green,off,none,off,none,off,none,off,none,off,none
+from_studio_X_on_air_change_to_automat_on_next_hour,blink,green,on,green,off,none,off,none,off,none,off,none,off,none
+studio_X_on_air_immediate_state,off,none,on,green,on,red,off,none,off,none,off,none,on,yellow
+studio_X_on_air_immediate_release,blink_fast,green,blink,yellow,on,red,off,none,off,none,off,none,on,yellow
+from_studio_X_on_air_change_to_studio_Y_on_next_hour,off,none,on,green,off,none,blink,green,off,none,off,none,off,none
+studio_X_on_air_studio_Y_takeover_request,off,none,on,green,off,none,on,yellow,off,none,off,none,off,none
+noop,off,none,off,none,off,none,off,none,off,none,off,none,off,none

@@ -2,7 +2,6 @@ import itertools
 import logging
 
 import attr
-import pandas
 from transitions import State
 from transitions.extensions.diagrams import GraphMachine
 
@@ -38,7 +37,8 @@ class LampAwareMachine(GraphMachine):
 
 
 def load_states_transitions():
-    states_data = pandas.read_excel("dispatcher.ods", sheet_name="states")
+    import pandas
+    states_data = pandas.read_csv("transitions_data/states.csv")
     states = {}
 
     for _, state_data in states_data.iterrows():
@@ -96,7 +96,7 @@ def load_states_transitions():
 
     check_states_ignore_immediate_lamp(states)
 
-    transitions_data = pandas.read_excel("dispatcher.ods", sheet_name="transitions", converters={"y_to_x": bool})
+    transitions_data = pandas.read_csv("transitions_data/transitions.csv", converters={"y_to_x": bool})
     transitions = transitions_data.to_dict(orient="records")
     for transition in transitions:
         transition['source'] = states[transition['source']]
