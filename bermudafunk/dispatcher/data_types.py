@@ -90,11 +90,6 @@ class Studio(BaseStudio):
         self.release_button = release_button
         self.immediate_button = immediate_button
 
-    def __del__(self):
-        self.takeover_button = None
-        self.release_button = None
-        self.immediate_button = None
-
     @property
     def takeover_button(self) -> typing.Optional[BaseButton]:
         return self._takeover_button
