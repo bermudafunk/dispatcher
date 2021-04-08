@@ -20,11 +20,11 @@ _websockets = weakref.WeakSet()
 
 
 def redraw_complete_graph(dispatcher: Dispatcher):
-    dispatcher.machine.get_graph().draw('static/full_state_machine.png', prog='dot')
+    dispatcher.machine.get_graph(force_new=True).draw('static/full_state_machine.png', prog='dot')
 
 
 def redraw_graph(dispatcher: Dispatcher):
-    dispatcher.machine.get_graph(show_roi=True).draw('static/partial_state_machine.png', prog='dot')
+    dispatcher.machine.get_graph(force_new=True, show_roi=True).draw('static/partial_state_machine.png', prog='dot')
 
 
 async def run(dispatcher: Dispatcher):
