@@ -166,12 +166,12 @@ class Dispatcher:
 
         # Add the transitions between the states to the machine
         for transition in transitions:
-            if 'y_to_x' in transition:
-                if transition['y_to_x']:
+            if 'switch_xy' in transition:
+                if transition['switch_xy']:
                     if 'before' not in transition:
                         transition['before'] = []
-                    transition['before'].append(self._prepare_y_to_x)
-                del transition['y_to_x']
+                    transition['before'].append(self._switch_xy)
+                del transition['switch_xy']
             self._machine.add_transition(**transition)
 
         self._machine_observers: typing.Set[typing.Callable[[Dispatcher, EventData], typing.Any]] = weakref.WeakSet()
@@ -216,8 +216,8 @@ class Dispatcher:
     def studios_with_automat(self) -> typing.List[BaseStudio]:
         return [self._automat.studio] + self._studios
 
-    def _prepare_y_to_x(self, _: EventData = None):
-        self._x, self._y = self._y, None
+    def _switch_xy(self, _: EventData = None):
+        self._x, self._y = self._y, self._x
 
     def _change_to_automat(self, _: EventData = None):
         logger.debug('change to automat')

@@ -1,4 +1,4 @@
-trigger,source,dest,y_to_x
+trigger,source,dest,switch_xy
 takeover_X,automat_on_air,from_automat_on_air_change_to_studio_X_on_next_hour,
 immediate_X,automat_on_air,automat_on_air_immediate_state_X,
 takeover_X,automat_on_air_immediate_state_X,studio_X_on_air,

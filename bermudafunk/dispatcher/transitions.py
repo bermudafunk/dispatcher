@@ -106,7 +106,7 @@ def load_timers_states_transitions() -> Tuple[Dict[str, float], Dict[str, LampAw
 
     check_states_ignore_immediate_lamp(states)
 
-    transitions_data = pandas.read_csv("transitions_data/transitions.csv", converters={"y_to_x": bool})
+    transitions_data = pandas.read_csv("transitions_data/transitions.csv", converters={"switch_xy": bool})
     transitions = transitions_data.to_dict(orient="records")
 
     triggers = {"next_hour"} | set(
