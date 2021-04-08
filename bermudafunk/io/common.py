@@ -42,7 +42,8 @@ class BaseButton(abc.ABC):
 
     def _trigger_event(self, *_, **__):
         for trigger in self.__trigger:
-            if inspect.iscoroutinefunction(trigger):
+            if inspect.iscoroutinefunction(trigger) or (
+                isinstance(trigger, functools.partial) and inspect.iscoroutinefunction(trigger.func)):
                 asyncio.run_coroutine_threadsafe(trigger(), base.loop)
             else:
                 trigger()

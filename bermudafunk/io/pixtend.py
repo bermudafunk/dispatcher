@@ -349,7 +349,8 @@ class Pixtend:
 
     def _trigger_observers(self):
         for observer in self._observer:
-            if inspect.iscoroutinefunction(observer):
+            if inspect.iscoroutinefunction(observer) or (
+                isinstance(observer, functools.partial) and inspect.iscoroutinefunction(observer.func)):
                 asyncio.run_coroutine_threadsafe(observer(), loop)
             else:
                 observer()
