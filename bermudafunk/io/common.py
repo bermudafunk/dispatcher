@@ -57,7 +57,7 @@ class LampState(enum.Enum):
     OFF = 0
     ON = 0
     BLINK = 2
-    BLINK_FAST = 4
+    BLINK_FAST = 6
 
     def __new__(cls, frequency: float):
         value = len(cls.__members__) + 1
