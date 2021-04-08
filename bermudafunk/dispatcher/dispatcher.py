@@ -55,8 +55,6 @@ class Dispatcher:
         automat: DispatcherStudioDefinition,
         dispatcher_studios: typing.List[DispatcherStudioDefinition],
         audit_internal_state=False,
-        immediate_state_time=300,
-        immediate_release_time=30
     ):
 
         self.file_path = 'state.json'
@@ -100,8 +98,12 @@ class Dispatcher:
             Dispatcher._y = property(_y_get, _y_set)
             Dispatcher._on_air_selector_value = property(_on_air_selector_value_get, _on_air_selector_value_set)
 
-        self.immediate_state_time = int(immediate_state_time)  # in seconds
-        self.immediate_release_time = int(immediate_release_time)  # in seconds
+        # Timers
+        self._timers = {
+            'immediate_state': 300,
+            'immediate_release': 30,
+        }
+        self._timer_tasks = {}
 
         self._symnet_controller = symnet_controller
 
@@ -180,12 +182,16 @@ class Dispatcher:
             self._machine.add_transition(**transition)
 
         # Assure to ignore button presses which are not in any transition
+        triggers = [f'{timer}_timeout' for timer in self._timers]
         for button in Button:
             for kind in ['X', 'Y']:
-                trigger_name = button.name + '_' + kind
-                if trigger_name not in self._machine.events.keys():
-                    self._machine.add_transition(trigger=trigger_name, source='noop',
-                                                 dest='noop')  # noop to complete all combinations of buttons presses
+                triggers.append(button.name + '_' + kind)
+        for trigger in triggers:
+            if trigger not in self._machine.events.keys():
+                self._machine.add_transition(
+                    trigger=trigger,
+                    source='noop',
+                    dest='noop')  # noop to complete all combinations of buttons presses
 
         self._machine_observers: typing.Set[typing.Callable[[Dispatcher, EventData], typing.Any]] = weakref.WeakSet()
 
@@ -260,10 +266,9 @@ class Dispatcher:
         destination_state = event.transition.dest
         if 'next_hour' not in destination_state:
             self._stop_next_hour_timer()
-        if 'immediate_state' not in destination_state:
-            self._stop_immediate_state_timer()
-        if 'immediate_release' not in destination_state:
-            self._stop_immediate_release_timer()
+        for timer in self._timers:
+            if timer not in destination_state:
+                self._stop_timer(timer)
 
     def _after_state_change(self, event: EventData):
         if event.transition.dest is None:  # internal transition, don't do anything right now
@@ -278,17 +283,16 @@ class Dispatcher:
         destination_state = event.transition.dest
         if 'next_hour' in destination_state:
             self._start_next_hour_timer()
-        if 'immediate_state' in destination_state:
-            self._start_immediate_state_timer()
-        if 'immediate_release' in destination_state:
-            self._start_immediate_release_timer()
+        for timer in self._timers:
+            if timer in destination_state:
+                self._start_timer(timer)
 
     async def _cleanup(self):
         await base.cleanup_event.wait()
         logger.debug('cleanup timers')
         self._stop_next_hour_timer()
-        self._stop_immediate_state_timer()
-        self._stop_immediate_release_timer()
+        for timer in self._timers:
+            self._stop_timer(timer)
         self.save()
 
     async def _process_studio_button_events(self):
@@ -411,53 +415,33 @@ class Dispatcher:
             self._next_hour_timer.cancel()
             self._next_hour_timer = None
 
-    def _start_immediate_state_timer(self, _: EventData = None):
-        if self._immediate_state_timer and not self._immediate_state_timer.done():
-            return
+    def _start_timer(self, timer: str):
+        if timer in self._timer_tasks:
+            task = self._timer_tasks[timer]
+            if task and not task.done():
+                return
 
-        self._immediate_state_timer = base.loop.create_task(self.__immediate_state_timer())
+        logger.debug('start %s timer', timer)
+        self._timer_tasks[timer] = base.loop.create_task(self.__timer(timer))
 
-    async def __immediate_state_timer(self):
-        logger.debug('start immediate state timer')
+    async def __timer(self, timer: str):
+        logger.debug('started %s timer', timer)
 
         try:
-            await asyncio.sleep(self.immediate_state_time)
+            await asyncio.sleep(self._timers[timer])
             try:
-                self._machine.trigger('immediate_state_timeout')
+                self._machine.trigger(f'{timer}_timeout')
             except MachineError as e:
                 logger.critical(e)
         finally:
-            self._immediate_state_timer = None
+            self._timer_tasks[timer] = None
+            logger.debug('finished %s timer', timer)
 
-    def _stop_immediate_state_timer(self, _: EventData = None):
-        if self._immediate_state_timer:
-            logger.debug('stop immediate state timer')
-            self._immediate_state_timer.cancel()
-            self._immediate_state_timer = None
-
-    def _start_immediate_release_timer(self, _: EventData = None):
-        logger.debug('start immediate release timer')
-
-        if self._immediate_release_timer and self._immediate_release_timer.done():
-            return
-
-        self._immediate_release_timer = base.loop.create_task(self.__immediate_release_timer())
-
-    async def __immediate_release_timer(self):
-        try:
-            await asyncio.sleep(self.immediate_release_time)
-            try:
-                self._machine.trigger('immediate_release_timeout')
-            except MachineError as e:
-                logger.critical(e)
-        finally:
-            self._immediate_release_timer = None
-
-    def _stop_immediate_release_timer(self, _: EventData = None):
-        if self._immediate_release_timer:
-            logger.debug('stop immediate release timer')
-            self._immediate_release_timer.cancel()
-            self._immediate_release_timer = None
+    def _stop_timer(self, timer: str):
+        if timer in self._timer_tasks and self._timer_tasks[timer]:
+            logger.debug('stop %s timer', timer)
+            self._timer_tasks[timer].cancel()
+            del self._timer_tasks[timer]
 
     @property
     def status(self):
