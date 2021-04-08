@@ -1,7 +1,9 @@
 import datetime
 
+from croniter import croniter
 from dateutil import tz
-from dateutil.relativedelta import relativedelta
+
+_next_hour_cron = croniter('0 * * * *')
 
 
 def calc_next_hour(now=None):
@@ -9,11 +11,4 @@ def calc_next_hour(now=None):
         now = datetime.datetime.now(tz=tz.UTC)
     else:
         now = now.astimezone(tz=tz.UTC)
-    delta = relativedelta(hours=1, minute=0, second=0, microsecond=0)
-
-    next_hour = now + delta
-
-    if next_hour - now > datetime.timedelta(hours=1):
-        next_hour -= datetime.timedelta(hours=1)
-
-    return next_hour
+    return _next_hour_cron.get_next(datetime.datetime, start_time=now)
