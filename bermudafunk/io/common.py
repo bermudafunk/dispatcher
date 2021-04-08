@@ -17,36 +17,43 @@ from bermudafunk import base
 logger = logging.getLogger(__name__)
 
 
-class BaseButton(abc.ABC):
+class Observable:
+    def __init__(self):
+        self.__observer: Set[Callable] = set()
+
+    def add_observer(self, handler: Callable):
+        if not isinstance(handler, collections.abc.Hashable):
+            raise TypeError("The supplied handler isn't hashable")
+        if not callable(handler):
+            raise TypeError("The supplied handler isn't callable")
+        self.__observer.add(handler)
+
+    def remove_observer(self, handler: Callable):
+        if not isinstance(handler, collections.abc.Hashable):
+            raise TypeError("The supplied handler isn't hashable")
+        if not callable(handler):
+            raise TypeError("The supplied handler isn't callable")
+        self.__observer.remove(handler)
+
+    def _trigger_observers(self, *_, **__):
+        for observer in self.__observer:
+            if inspect.iscoroutinefunction(observer) or (
+                isinstance(observer, functools.partial) and inspect.iscoroutinefunction(observer.func)
+            ):
+                asyncio.run_coroutine_threadsafe(observer(), base.loop)
+            else:
+                observer()
+
+
+class BaseButton(abc.ABC, Observable):
     def __init__(self, name: str):
+        super().__init__()
         self.__trigger: Set[Callable] = set()
         self._name = str(name)
 
     @property
     def name(self) -> str:
         return self._name
-
-    def add_handler(self, handler: Callable):
-        if not isinstance(handler, collections.abc.Hashable):
-            raise TypeError("The supplied handler isn't hashable")
-        if not callable(handler):
-            raise TypeError("The supplied handler isn't callable")
-        self.__trigger.add(handler)
-
-    def remove_handler(self, handler: Callable):
-        if not isinstance(handler, collections.abc.Hashable):
-            raise TypeError("The supplied handler isn't hashable")
-        if not callable(handler):
-            raise TypeError("The supplied handler isn't callable")
-        self.__trigger.remove(handler)
-
-    def _trigger_event(self, *_, **__):
-        for trigger in self.__trigger:
-            if inspect.iscoroutinefunction(trigger) or (
-                isinstance(trigger, functools.partial) and inspect.iscoroutinefunction(trigger.func)):
-                asyncio.run_coroutine_threadsafe(trigger(), base.loop)
-            else:
-                trigger()
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(name={self._name!r})"
@@ -58,6 +65,7 @@ class LampState(enum.Enum):
     ON = 0
     BLINK = 2
     BLINK_FAST = 6
+    BLINK_REALLY_FAST = 10
 
     def __new__(cls, frequency: float):
         value = len(cls.__members__) + 1
@@ -74,7 +82,7 @@ class LampState(enum.Enum):
         return f"{self.__class__.__name__}.{self.name}"
 
 
-class BaseLamp(abc.ABC):
+class BaseLamp(abc.ABC, Observable):
     def __init__(
         self,
         name: str,
@@ -82,6 +90,7 @@ class BaseLamp(abc.ABC):
         off_callable: Callable,
         state: LampState,
     ):
+        super().__init__()
         self._name = str(name)
 
         if not isinstance(state, LampState):
@@ -112,6 +121,7 @@ class BaseLamp(abc.ABC):
             if self._state is not new_state:
                 self._state = new_state
                 self._assure_state()
+                self._trigger_observers()
 
     def _assure_state(self):
         if self._state.frequency > 0:
@@ -187,6 +197,7 @@ class BaseTriColorLamp(BaseLamp):
         with self._lock:
             if self._color is not new_color:
                 self._color = new_color
+                self._trigger_observers()
                 self._assure_state()
 
     @property
@@ -203,6 +214,7 @@ class BaseTriColorLamp(BaseLamp):
                 self._state = new_color_lamp_state.state
                 self._color = new_color_lamp_state.color
                 self._assure_state()
+                self._trigger_observers()
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(name={self._name!r}, state={self._state!r}, color={self._color!r})"

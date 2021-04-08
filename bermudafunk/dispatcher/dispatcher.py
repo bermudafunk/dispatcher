@@ -15,6 +15,7 @@ from bermudafunk import symnet
 from bermudafunk.dispatcher.data_types import BaseStudio, ButtonEvent, DispatcherStudioDefinition, Studio
 from bermudafunk.dispatcher.transitions import LampAwareMachine as Machine, LampStateTarget, load_timers_states_transitions
 from bermudafunk.dispatcher.utils import calc_next_hour
+from bermudafunk.io import common
 
 logger = logging.getLogger(__name__)
 
@@ -100,10 +101,10 @@ class Dispatcher:
 
         self._symnet_controller = symnet_controller
 
-        # task holders: The contained task should trigger the corresponding timeout action
+        # task holders
         self._next_hour_timer: typing.Optional[asyncio.Task] = None
-        self._immediate_state_timer: typing.Optional[asyncio.Task] = None
-        self._immediate_release_timer: typing.Optional[asyncio.Task] = None
+        self._timer_tasks: typing.Dict[str, asyncio.Task] = {}
+        self._signal_error_task: typing.Optional[asyncio.Task] = None
 
         # collecting button presses
         self._dispatcher_button_event_queue: asyncio.Queue = asyncio.Queue(maxsize=1, loop=base.loop)
@@ -148,7 +149,6 @@ class Dispatcher:
         self.__y = None
         self._y: typing.Optional[Studio] = None
 
-        self._timer_tasks: typing.Dict[str, asyncio.Task] = {}
         self._timers, states, transitions = load_timers_states_transitions()
 
         states['automat_on_air'].add_callback('enter', self._change_to_automat)
@@ -297,28 +297,41 @@ class Dispatcher:
             try:
                 self._machine.trigger(trigger_name, button_event=event)
             except:
-                logger.critical("Unable to process trigger %s", trigger_name)
-                # TODO: Signal error
-                pass
+                logger.warning("Unable to process trigger %s", trigger_name)
+                self._signal_error_task = base.loop.create_task(self._signal_error(event.studio))
+                continue
+            finally:
+                self._audit_state()
 
-            self._audit_state()
             self._assure_lamp_state()
+
+    async def _signal_error(self, studio: Studio):
+        studio.immediate_lamp.color_lamp_state = common.TriColorLampState(
+            state=common.LampState.BLINK_REALLY_FAST,
+            color=common.TriColorLampColor.RED,
+        )
+        await asyncio.sleep(1)
+        self._assure_lamp_state()
 
     def _assure_lamp_state(self, _: EventData = None):
         """Set the lamp state in studios"""
         logger.debug('assure lamp status')
-        new_lamp_state: LampStateTarget = self._machine.get_state(self._machine.state).lamp_state_target
-        self._automat.studio.lamp_state = new_lamp_state.automat
+        if self._signal_error_task:
+            self._signal_error_task.cancel()
+            self._signal_error_task = None
+        lamp_state_target: LampStateTarget = self._machine.get_state(self._machine.state).lamp_state_target
+        self._automat.studio.lamp_state = lamp_state_target.automat
         for studio in self._studios:
             if studio == self._x:
-                studio.lamp_state = new_lamp_state.x
+                studio.lamp_state = lamp_state_target.x
             elif studio == self._y:
-                studio.lamp_state = new_lamp_state.y
+                studio.lamp_state = lamp_state_target.y
             else:
-                studio.lamp_state = new_lamp_state.other
+                studio.lamp_state = lamp_state_target.other
 
     def _audit_state(self, _: EventData = None):
         """Assure the required studios and only these are set"""
+        logger.debug("Audit state")
         state = self._machine.state
         if 'X' in state:
             if self._x is None:

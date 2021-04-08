@@ -28,7 +28,8 @@ def redraw_graph(dispatcher: Dispatcher):
 
 
 async def run(dispatcher: Dispatcher):
-    observer_event = asyncio.Event()
+    dispatcher_observer_event = asyncio.Event()
+    lamp_observer_event = asyncio.Event()
 
     app = web.Application()
 
@@ -127,18 +128,28 @@ async def run(dispatcher: Dispatcher):
         for ws in set(_websockets):
             await ws.close(code=aiohttp.WSCloseCode.GOING_AWAY, message='Server shutdown')
 
-    def observer(*_, **__):
-        observer_event.set()
+    def dispatcher_observer(*_, **__):
+        dispatcher_observer_event.set()
 
-    async def observer_push():
+    async def dispatcher_observer_push():
         while True:
-            await observer_event.wait()
+            await dispatcher_observer_event.wait()
             for ws in _websockets:
                 await ws.send_str(dispatcher_status_msg())
                 for studio in dispatcher.studios_with_automat:
                     await ws.send_str(lamp_state_msg(studio))
+            dispatcher_observer_event.clear()
 
-            observer_event.clear()
+    def lamp_observer(*_, **__):
+        lamp_observer_event.set()
+
+    async def lamp_observer_push():
+        while True:
+            await lamp_observer_event.wait()
+            for ws in _websockets:
+                for studio in dispatcher.studios_with_automat:
+                    await ws.send_str(lamp_state_msg(studio))
+            lamp_observer_event.clear()
 
     def dispatcher_status_msg():
         return json.dumps({'kind': 'dispatcher.status', 'payload': dispatcher.status})
@@ -152,10 +163,14 @@ async def run(dispatcher: Dispatcher):
     await runner.setup()
     site = web.TCPSite(runner, '192.168.96.42', 8080)
     await site.start()
-    dispatcher.machine_observers.add(observer)
-    observer_push_task = base.loop.create_task(observer_push())
+    dispatcher.machine_observers.add(dispatcher_observer)
+    dispatcher_observer_push_task = base.loop.create_task(dispatcher_observer_push())
+    for studio_ in dispatcher.studios:
+        studio_.immediate_lamp.add_observer(lamp_observer)
+    lamp_observer_push_task = base.loop.create_task(lamp_observer_push())
     await base.cleanup_event.wait()
-    observer_push_task.cancel()
+    dispatcher_observer_push_task.cancel()
+    lamp_observer_push_task.cancel()
     await close_remaining_websockets()
     logger.debug('closed remaining websockets')
     await runner.cleanup()

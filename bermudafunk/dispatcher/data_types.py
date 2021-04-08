@@ -99,12 +99,12 @@ class Studio(BaseStudio):
         if new_button == self._takeover_button:
             return
         if self._takeover_button is not None:
-            self._takeover_button.remove_handler(self.__takeover_button_coroutine)
+            self._takeover_button.remove_observer(self.__takeover_button_coroutine)
 
         self._takeover_button = new_button
 
         if new_button is not None:
-            self._takeover_button.add_handler(self.__takeover_button_coroutine)
+            self._takeover_button.add_observer(self.__takeover_button_coroutine)
 
     @property
     def release_button(self) -> typing.Optional[BaseButton]:
@@ -115,12 +115,12 @@ class Studio(BaseStudio):
         if new_button == self._release_button:
             return
         if self._release_button is not None:
-            self._release_button.remove_handler(self.__release_button_coroutine)
+            self._release_button.remove_observer(self.__release_button_coroutine)
 
         self._release_button = new_button
 
         if new_button is not None:
-            self._release_button.add_handler(self.__release_button_coroutine)
+            self._release_button.add_observer(self.__release_button_coroutine)
 
     @property
     def immediate_button(self) -> typing.Optional[BaseButton]:
@@ -131,12 +131,12 @@ class Studio(BaseStudio):
         if new_button == self._immediate_button:
             return
         if self._immediate_button is not None:
-            self._immediate_button.remove_handler(self.__immediate_button_coroutine)
+            self._immediate_button.remove_observer(self.__immediate_button_coroutine)
 
         self._immediate_button = new_button
 
         if new_button is not None:
-            self._immediate_button.add_handler(self.__immediate_button_coroutine)
+            self._immediate_button.add_observer(self.__immediate_button_coroutine)
 
     async def __button_coroutine(self, button):
         event = ButtonEvent(self, button)

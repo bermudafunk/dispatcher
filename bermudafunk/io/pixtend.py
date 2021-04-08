@@ -1,9 +1,5 @@
-import asyncio
-import collections
-import collections.abc
 import enum
 import functools
-import inspect
 import logging
 import math
 import struct
@@ -15,7 +11,8 @@ import warnings
 import prometheus_client
 import spidev
 
-from bermudafunk.base import cleanup_event, loop
+from bermudafunk.base import cleanup_event
+from bermudafunk.io import common
 from bermudafunk.io.common import BaseButton, BaseLamp, BaseTriColorLamp, LampState, TriColorLampColor
 from bermudafunk.io.gpio import GPIOLamp as GPIOOutput
 
@@ -122,7 +119,7 @@ class ModelError(PixtendBaseError):
     pass
 
 
-class Pixtend:
+class Pixtend(common.Observable):
     IN_HEADER = struct.Struct('<5B 2x')
     IN_DATA = struct.Struct('<H 6H B 2H 2H 2H 2H 5x 64s')
     IN_FORMAT_HEADER = struct.Struct('<7s H')
@@ -136,6 +133,7 @@ class Pixtend:
     CRC_ERRORS = prometheus_client.Counter('pixtend_crc_errors', 'CRC errors occurring in communication with pixtend', ['region'])
 
     def __init__(self, communication_interval: float = 0.03, autostart=True):
+        super().__init__()
         self.logger = logging.getLogger(Pixtend.__name__)
 
         self.transfer_lock = threading.RLock()
@@ -191,8 +189,6 @@ class Pixtend:
 
         self.__communication_thread: typing.Optional[threading.Thread] = None
         self.__communication_thread_terminate = threading.Event()
-
-        self._observer: typing.Set[typing.Callable] = set()
 
         if autostart:
             self.start_communication_thread()
@@ -333,28 +329,6 @@ class Pixtend:
             # Calculate the duration to the next auto mode deadline
             # and sleep until then.
             time.sleep(next_com - now)
-
-    def add_observer(self, handler: typing.Callable):
-        if not isinstance(handler, collections.abc.Hashable):
-            raise TypeError("The supplied handler isn't hashable")
-        if not callable(handler):
-            raise TypeError("The supplied handler isn't callable")
-        self._observer.add(handler)
-
-    def remove_observer(self, handler: typing.Callable):
-        if not isinstance(handler, collections.abc.Hashable):
-            raise TypeError("The supplied handler isn't hashable")
-        if not callable(handler):
-            raise TypeError("The supplied handler isn't callable")
-        self._observer.remove(handler)
-
-    def _trigger_observers(self):
-        for observer in self._observer:
-            if inspect.iscoroutinefunction(observer) or (
-                isinstance(observer, functools.partial) and inspect.iscoroutinefunction(observer.func)):
-                asyncio.run_coroutine_threadsafe(observer(), loop)
-            else:
-                observer()
 
     safe = _bit_getter_setter('_uc_ctrl_1', 0)
     retain_copy = _bit_getter_setter('_uc_ctrl_1', 1)
@@ -555,7 +529,7 @@ class PixtendButton(BaseButton):
             if new_value != self._old_value:
                 self._old_value = new_value
                 if new_value != self._default_value:
-                    self._trigger_event()
+                    self._trigger_observers()
 
     def __repr__(self) -> str:
         return '{}(name={!r}, channel={!r}, default_value={!r}, pixtend={!r})'.format(

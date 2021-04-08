@@ -77,12 +77,12 @@ class GPIOButton(common.BaseButton, GPIO):
         if pull_up_down is RPi.GPIO.PUD_DOWN:
             RPi.GPIO.add_event_detect(pin,
                                       RPi.GPIO.RISING,
-                                      callback=self._trigger_event,
+                                      callback=self._trigger_observers,
                                       bouncetime=GPIOButton.DEBOUNCE_TIME)
         elif pull_up_down is RPi.GPIO.PUD_UP:
             RPi.GPIO.add_event_detect(pin,
                                       RPi.GPIO.FALLING,
-                                      callback=self._trigger_event,
+                                      callback=self._trigger_observers,
                                       bouncetime=GPIOButton.DEBOUNCE_TIME)
 
     def __del__(self):

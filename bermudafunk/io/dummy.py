@@ -8,12 +8,12 @@ logger = logging.getLogger(__name__)
 
 
 class DummyButton(common.BaseButton):
-    def add_handler(self, handler: typing.Callable):
-        super().add_handler(handler)
+    def add_observer(self, handler: typing.Callable):
+        super().add_observer(handler)
         logger.info("Added handler {} to button {}".format(handler, self.name))
 
-    def remove_handler(self, handler: typing.Callable):
-        super().remove_handler(handler)
+    def remove_observer(self, handler: typing.Callable):
+        super().remove_observer(handler)
         logger.info("Removed handler {} to button {}".format(handler, self.name))
 
 
