@@ -8,7 +8,7 @@ from bermudafunk.symnet import SymNetDevice
 if __name__ == '__main__':
     base.logger.debug('Main Start')
 
-    pixtend = Pixtend()
+    pixtend = Pixtend(autostart=False)
     base.cleanup_tasks.append(base.loop.create_task(pixtend.cleanup_aware_shutdown()))
 
     device = SymNetDevice(local_address=(base.config.myIp, base.config.myPort),
@@ -109,6 +109,7 @@ if __name__ == '__main__':
     )
     dispatcher.load()
     dispatcher.start()
+    pixtend.start_communication_thread()
 
     base.cleanup_tasks.append(base.loop.create_task(web.run(dispatcher)))
 

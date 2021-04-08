@@ -10,6 +10,7 @@ import struct
 import threading
 import time
 import typing
+import warnings
 
 import prometheus_client
 import spidev
@@ -280,7 +281,7 @@ class Pixtend:
 
     def start_communication_thread(self):
         if self.__communication_thread is not None:
-            raise RuntimeWarning('Communication thread is already running')
+            return warnings.warn(RuntimeWarning('Communication thread is already running'))
 
         self.__communication_thread_terminate.clear()
         self.__communication_thread = threading.Thread(
