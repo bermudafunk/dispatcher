@@ -531,7 +531,7 @@ class Pixtend:
 
 
 class PixtendButton(BaseButton):
-    DEBOUNCE_TIME = 150  # in ms
+    DEBOUNCE_TIME = 50  # in ms
 
     def __init__(self, name: str, pixtend: Pixtend, channel: int, default_value=False):
         super().__init__(name)
