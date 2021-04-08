@@ -6,10 +6,9 @@ import functools
 import inspect
 import itertools
 import logging
-import operator
 import threading
 import time
-from typing import Callable, ClassVar, Dict, List, Optional, Set, Tuple
+from typing import Callable, List, Optional, Set
 
 import attr
 
@@ -58,7 +57,6 @@ class LampState(enum.Enum):
     ON = 0
     BLINK = 2
     BLINK_FAST = 4
-    ANIMATION = 0
 
     def __new__(cls, frequency: float):
         value = len(cls.__members__) + 1
@@ -75,109 +73,13 @@ class LampState(enum.Enum):
         return f"{self.__class__.__name__}.{self.name}"
 
 
-@attr.s(frozen=True, slots=True)
-class LampKeyframe:
-    duration: float = attr.ib(converter=float)
-    state: LampState = attr.ib(
-        default=LampState.OFF,
-        validator=attr.validators.instance_of(LampState))
-
-    @state.validator
-    def _validate_state(self, _, value: LampState):
-        if value == LampState.ANIMATION:
-            raise ValueError("The state must differ from ANIMATION")
-
-
-class LampAnimation:
-    keyframe_cls = LampKeyframe
-    instances: ClassVar[Dict[str, 'LampAnimation']] = {}
-
-    def __init__(
-        self,
-        name: str,
-        *args,
-        keyframes=(),
-        default_state: Optional[LampKeyframe] = None,
-        **kwargs
-    ):
-        self._name = str(name)
-        keyframe_cls = self.keyframe_cls
-        kfs: List[keyframe_cls] = self._flatten_keyframes(*args, keyframes=keyframes)
-
-        defaults = self._process_defaults(default_state=default_state, **kwargs)
-        self._keyframes = tuple(attr.evolve(kf, **defaults) for kf in kfs)
-
-        if self._name in self.instances and self != self.instances[self._name]:
-            raise ValueError(f"Already a not equal instance created with name {self._name!r}")
-        self.instances[self._name] = self
-
-    @classmethod
-    def _flatten_keyframes(cls, *args, keyframes=()) -> List[keyframe_cls]:
-        arg_keyframes = itertools.chain(args, keyframes)
-        kfs: List[cls.keyframe_cls] = []
-        for keyframe in arg_keyframes:
-            if isinstance(keyframe, cls.keyframe_cls):
-                kfs.append(keyframe)
-            else:
-                for inner_keyframe in keyframe:
-                    if isinstance(inner_keyframe, cls.keyframe_cls):
-                        kfs.append(inner_keyframe)
-                    else:
-                        raise TypeError(
-                            f"Keyframes must be instances of {cls.keyframe_cls}, supplied: {type(inner_keyframe)}"
-                        )
-        return kfs
-
-    @classmethod
-    def _process_defaults(cls, **kwargs) -> Dict:
-        fields = attr.fields_dict(cls.keyframe_cls)
-        field_prefix = "default_"
-        defaults = {}
-        for kw in kwargs:
-            if kw.startswith(field_prefix):
-                field = kw[len(field_prefix):]
-                if field in fields and kwargs[kw] is not None:
-                    defaults[field] = kwargs[kw]
-        return defaults
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @property
-    def keyframes(self) -> Tuple[LampKeyframe]:
-        return self._keyframes
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(name={self._name!r}, keyframes={self._keyframes!r})"
-
-    def __eq__(self, other: object) -> bool:
-        return (isinstance(other, self.__class__)
-                and self._name == other._name
-                and len(self._keyframes) == len(other._keyframes)
-                and all(a == b for a, b in zip(self._keyframes, other._keyframes)))
-
-    def __hash__(self) -> int:
-        hashes = map(hash, itertools.chain([self._name], self._keyframes))
-        return functools.reduce(operator.xor, hashes, 0)
-
-
-class LampAnimator(threading.Thread):
-    def stop(self):
-        pass
-
-
 class BaseLamp(abc.ABC):
-    animation_cls = LampAnimation
-    animator_cls = LampAnimator
-
     def __init__(
         self,
         name: str,
         on_callable: Callable,
         off_callable: Callable,
         state: LampState,
-        animation: Optional[animation_cls] = None
     ):
         self._name = str(name)
 
@@ -186,15 +88,6 @@ class BaseLamp(abc.ABC):
         self._state = state
         self._lock = threading.RLock()
         self._blinker: Optional[Blinker] = None
-
-        animation_cls = self.animation_cls
-        if animation is not None:
-            if not isinstance(animation, animation_cls):
-                raise TypeError(f"This supports only values of {animation_cls}")
-            self._state = LampState.ANIMATION
-        self._animation: Optional[animation_cls] = animation
-        animator_cls = self.animator_cls
-        self._animator: Optional[animator_cls] = None
 
         self._on_callable = on_callable
         self._off_callable = off_callable
@@ -219,19 +112,6 @@ class BaseLamp(abc.ABC):
                 self._state = new_state
                 self._assure_state()
 
-    @property
-    def animation(self) -> Optional[animation_cls]:
-        return self._animation
-
-    @animation.setter
-    def animation(self, new_animation: Optional[animation_cls]):
-        if new_animation is None:
-            self._animation = None
-            self.state = LampState.OFF
-        else:
-            if not isinstance(new_animation, self.animation_cls):
-                raise TypeError(f"This supports only values of {self.animation_cls}")
-
     def _assure_state(self):
         if self._state.frequency > 0:
             if self._blinker is None:
@@ -243,18 +123,10 @@ class BaseLamp(abc.ABC):
                 self._blinker.start()
             else:
                 self._blinker.frequency = self._state.frequency
-        elif self._state is LampState.ANIMATION:
-            if self._animator is None:
-                pass
-            else:
-                pass
         else:
             if self._blinker is not None:
                 self._blinker.stop()
                 self._blinker = None
-            if self._animator is not None:
-                self._animator.stop()
-                self._animator = None
             if self._state is LampState.OFF:
                 self._off_callable()
             elif self._state is LampState.ON:
@@ -281,35 +153,6 @@ class TriColorLampColor(enum.Flag):
 class TriColorLampState:
     state: LampState = attr.ib(validator=attr.validators.instance_of(LampState))
     color: TriColorLampColor = attr.ib(validator=attr.validators.instance_of(TriColorLampColor))
-
-
-@attr.s(frozen=True, slots=True)
-class TriColorLampKeyframe(LampKeyframe):
-    color: TriColorLampColor = attr.ib(
-        default=TriColorLampColor.NONE,
-        validator=attr.validators.instance_of(TriColorLampColor))
-
-
-class TriColorLampAnimation(LampAnimation):
-    keyframe_cls = TriColorLampKeyframe
-
-    def __init__(
-        self,
-        name: str,
-        *args,
-        keyframes=(),
-        default_state: Optional[LampKeyframe] = None,
-        default_color: Optional[TriColorLampColor] = None,
-        **kwargs
-    ):
-        super().__init__(
-            name,
-            *args,
-            keyframes=keyframes,
-            default_state=default_state,
-            default_color=default_color,
-            **kwargs
-        )
 
 
 class BaseTriColorLamp(BaseLamp):
