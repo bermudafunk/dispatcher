@@ -11,8 +11,8 @@ from bermudafunk.io.dummy import DummyTriColorLamp
 
 @attr.s(frozen=True, slots=True)
 class StudioLampState:
-    main: TriColorLampState = attr.ib(validator=attr.validators.instance_of(TriColorLampState))
-    immediate: TriColorLampState = attr.ib(validator=attr.validators.instance_of(TriColorLampState))
+    main: TriColorLampState = attr.ib(factory=TriColorLampState, validator=attr.validators.instance_of(TriColorLampState))
+    immediate: TriColorLampState = attr.ib(factory=TriColorLampState, validator=attr.validators.instance_of(TriColorLampState))
 
 
 @enum.unique
@@ -162,4 +162,3 @@ class DispatcherStudioDefinition:
 class ButtonEvent:
     studio: Studio = attr.ib(validator=attr.validators.instance_of(Studio))
     button: Button = attr.ib(validator=attr.validators.instance_of(Button))
-

@@ -152,8 +152,8 @@ class TriColorLampColor(enum.Flag):
 
 @attr.s(frozen=True, slots=True)
 class TriColorLampState:
-    state: LampState = attr.ib(validator=attr.validators.instance_of(LampState))
-    color: TriColorLampColor = attr.ib(validator=attr.validators.instance_of(TriColorLampColor))
+    state: LampState = attr.ib(default=LampState.OFF, validator=attr.validators.instance_of(LampState))
+    color: TriColorLampColor = attr.ib(default=TriColorLampColor.NONE, validator=attr.validators.instance_of(TriColorLampColor))
 
 
 class BaseTriColorLamp(BaseLamp):

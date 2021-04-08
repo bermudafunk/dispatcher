@@ -49,56 +49,59 @@ def load_timers_states_transitions() -> Tuple[Dict[str, float], Dict[str, LampAw
     states = {}
 
     for _, state_data in states_data.iterrows():
+        name = state_data["name"]
+        lamp_state_target = LampStateTarget(
+            automat=data_types.StudioLampState(
+                main=common.TriColorLampState(
+                    state=common.LampState[state_data["automat_main_state"].upper()],
+                    color=common.TriColorLampColor[state_data["automat_main_color"].upper()],
+                ),
+            ),
+            x=data_types.StudioLampState(
+                main=common.TriColorLampState(
+                    state=common.LampState[state_data["x_main_state"].upper()],
+                    color=common.TriColorLampColor[state_data["x_main_color"].upper()],
+                ),
+                immediate=common.TriColorLampState(
+                    state=common.LampState[state_data["x_immediate_state"].upper()],
+                    color=common.TriColorLampColor[state_data["x_immediate_color"].upper()],
+                ),
+            ),
+            y=data_types.StudioLampState(
+                main=common.TriColorLampState(
+                    state=common.LampState[state_data["y_main_state"].upper()],
+                    color=common.TriColorLampColor[state_data["y_main_color"].upper()],
+                ),
+                immediate=common.TriColorLampState(
+                    state=common.LampState[state_data["y_immediate_state"].upper()],
+                    color=common.TriColorLampColor[state_data["y_immediate_color"].upper()],
+                ),
+            ),
+            other=data_types.StudioLampState(
+                main=common.TriColorLampState(
+                    state=common.LampState[state_data["other_main_state"].upper()],
+                    color=common.TriColorLampColor[state_data["other_main_color"].upper()],
+                ),
+                immediate=common.TriColorLampState(
+                    state=common.LampState[state_data["other_immediate_state"].upper()],
+                    color=common.TriColorLampColor[state_data["other_immediate_color"].upper()],
+                ),
+            ),
+        )
+        if 'X' not in name:
+            lamp_state_target = attr.evolve(lamp_state_target, x=data_types.StudioLampState())
+        if 'Y' not in name:
+            lamp_state_target = attr.evolve(lamp_state_target, y=data_types.StudioLampState())
+
         state = LampAwareState(
-            name=state_data["state"],
-            lamp_state_target=LampStateTarget(
-                automat=data_types.StudioLampState(
-                    main=common.TriColorLampState(
-                        state=common.LampState[state_data["automat_main_state"].upper()],
-                        color=common.TriColorLampColor[state_data["automat_main_color"].upper()],
-                    ),
-                    immediate=common.TriColorLampState(
-                        state=common.LampState.OFF,
-                        color=common.TriColorLampColor.NONE,
-                    )
-                ),
-                x=data_types.StudioLampState(
-                    main=common.TriColorLampState(
-                        state=common.LampState[state_data["x_main_state"].upper()],
-                        color=common.TriColorLampColor[state_data["x_main_color"].upper()],
-                    ),
-                    immediate=common.TriColorLampState(
-                        state=common.LampState[state_data["x_immediate_state"].upper()],
-                        color=common.TriColorLampColor[state_data["x_immediate_color"].upper()],
-                    ),
-                ),
-                y=data_types.StudioLampState(
-                    main=common.TriColorLampState(
-                        state=common.LampState[state_data["y_main_state"].upper()],
-                        color=common.TriColorLampColor[state_data["y_main_color"].upper()],
-                    ),
-                    immediate=common.TriColorLampState(
-                        state=common.LampState[state_data["y_immediate_state"].upper()],
-                        color=common.TriColorLampColor[state_data["y_immediate_color"].upper()],
-                    ),
-                ),
-                other=data_types.StudioLampState(
-                    main=common.TriColorLampState(
-                        state=common.LampState[state_data["other_main_state"].upper()],
-                        color=common.TriColorLampColor[state_data["other_main_color"].upper()],
-                    ),
-                    immediate=common.TriColorLampState(
-                        state=common.LampState[state_data["other_immediate_state"].upper()],
-                        color=common.TriColorLampColor[state_data["other_immediate_color"].upper()],
-                    ),
-                ),
-            )
+            name=name,
+            lamp_state_target=lamp_state_target
         )
         if state.name in states:
             raise ValueError("Duplicate state name {}".format(state.name))
         states[state.name] = state
 
-    assert len(states_data["state"]) == len(set(n.lower() for n in states_data["state"])), "duplicate state names"
+    assert len(states_data["name"]) == len(set(n.lower() for n in states_data["name"])), "duplicate state names"
     assert len(states) == len(set(s.lamp_state_target for s in states.values())), "duplicate lamp state targets"
 
     check_states_ignore_immediate_lamp(states)
@@ -126,34 +129,9 @@ def check_states_ignore_immediate_lamp(states):
         lst = state.lamp_state_target
         modified_states[state.name] = attr.evolve(
             lst,
-            automat=attr.evolve(
-                lst.automat,
-                immediate=common.TriColorLampState(
-                    state=common.LampState.OFF,
-                    color=common.TriColorLampColor.NONE,
-                )
-            ),
-            x=attr.evolve(
-                lst.x,
-                immediate=common.TriColorLampState(
-                    state=common.LampState.OFF,
-                    color=common.TriColorLampColor.NONE,
-                )
-            ),
-            y=attr.evolve(
-                lst.y,
-                immediate=common.TriColorLampState(
-                    state=common.LampState.OFF,
-                    color=common.TriColorLampColor.NONE,
-                )
-            ),
-            other=attr.evolve(
-                lst.other,
-                immediate=common.TriColorLampState(
-                    state=common.LampState.OFF,
-                    color=common.TriColorLampColor.NONE,
-                )
-            )
+            x=attr.evolve(lst.x, immediate=common.TriColorLampState()),
+            y=attr.evolve(lst.y, immediate=common.TriColorLampState()),
+            other=attr.evolve(lst.other, immediate=common.TriColorLampState())
         )
     for state1, state2 in itertools.combinations(modified_states.keys(), 2):
         if modified_states[state1] == modified_states[state2]:
