@@ -297,7 +297,7 @@ class Dispatcher:
             try:
                 self._machine.trigger(trigger_name, button_event=event)
             except:
-                logger.warning("Unable to process trigger %s", trigger_name)
+                logger.warning("Unable to process trigger %s of studio %s", trigger_name, event.studio.name)
                 self._signal_error_task = base.loop.create_task(self._signal_error(event.studio))
                 continue
             finally:
