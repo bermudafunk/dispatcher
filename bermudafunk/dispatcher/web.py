@@ -6,6 +6,7 @@ import weakref
 from concurrent.futures import ThreadPoolExecutor
 
 import aiohttp
+import prometheus_async
 from aiohttp import web
 
 from bermudafunk import base
@@ -158,6 +159,7 @@ async def run(dispatcher: Dispatcher):
         return json.dumps({'kind': 'studio.lamp.status', 'payload': {'studio': studio.name, 'status': studio.lamp_state}})
 
     app.add_routes(routes)
+    app.router.add_get('/metrics', prometheus_async.aio.web.server_stats)
 
     runner = web.AppRunner(app, handle_signals=False)
     await runner.setup()

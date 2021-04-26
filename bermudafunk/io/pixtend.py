@@ -131,6 +131,8 @@ class Pixtend(common.Observable):
 
     SPI_TRANSFERS = prometheus_client.Counter('pixtend_spi_transfers', 'Successful spi transfers with pixtend')
     CRC_ERRORS = prometheus_client.Counter('pixtend_crc_errors', 'CRC errors occurring in communication with pixtend', ['region'])
+    CRC_ERRORS.labels('header')
+    CRC_ERRORS.labels('data')
 
     def __init__(self, communication_interval: float = 0.03, autostart=True):
         super().__init__()
