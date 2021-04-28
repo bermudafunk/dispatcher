@@ -184,6 +184,8 @@ class Dispatcher:
             return
         self._started = True
 
+        self._assure_lamp_state()
+
         # Start timers
         self._symnet_controller.add_observer(self._set_current_state)
         base.start_cleanup_aware_coroutine(self._assure_current_state_loop)
@@ -466,11 +468,11 @@ class Dispatcher:
             logger.critical('Could not load specific studio: %s', e)
         except IOError as e:
             if e.errno == 2:
-                logger.warning('Could load dispatcher state: %s', e)
+                logger.warning('Could not load dispatcher state: %s', e)
             else:
-                logger.critical('Could load dispatcher state: %s', e)
+                logger.critical('Could not load dispatcher state: %s', e)
         except json.JSONDecodeError as e:
-            logger.critical('Could load dispatcher state: %s', e)
+            logger.critical('Could not load dispatcher state: %s', e)
 
     def save(self):
         state = self._SaveState(

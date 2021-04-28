@@ -572,7 +572,7 @@ class PixtendTriColorLamp(BaseTriColorLamp):
         channel_1: int,
         channel_2: int,
         state: LampState = LampState.OFF,
-        color: TriColorLampColor = TriColorLampColor.GREEN,
+        color: TriColorLampColor = TriColorLampColor.NONE,
     ):
         self._pixtend = pixtend
         self._channel_1 = int(channel_1)

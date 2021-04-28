@@ -32,7 +32,7 @@ class DummyTriColorLamp(common.BaseTriColorLamp):
         self,
         name: str,
         state: common.LampState = common.LampState.OFF,
-        color: common.TriColorLampColor = common.TriColorLampColor.GREEN,
+        color: common.TriColorLampColor = common.TriColorLampColor.NONE,
     ):
         super().__init__(
             name=name,
