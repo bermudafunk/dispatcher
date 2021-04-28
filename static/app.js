@@ -21,6 +21,13 @@ const update_selected_studio = function (new_value) {
     } else {
         selected_studio = new_value;
     }
+    for (const studio in lamp_map) {
+        if (studio === selected_studio) {
+            lamp_map[studio]['immediate'].css('visibility', 'visible');
+        } else {
+            lamp_map[studio]['immediate'].css('visibility', 'hidden');
+        }
+    }
     console.log(selected_studio);
 };
 
