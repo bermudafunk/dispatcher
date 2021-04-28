@@ -151,8 +151,13 @@ class Dispatcher:
 
         self._timers, states, transitions = load_timers_states_transitions()
 
-        states['automat_on_air'].add_callback('enter', self._change_to_automat)
-        states['studio_X_on_air'].add_callback('enter', self._change_to_studio)
+        for state_name in states:
+            if 'automat_on_air' in state_name:
+                states[state_name].add_callback('enter', self._change_to_automat)
+            elif 'studio_X_on_air' in state_name:
+                states[state_name].add_callback('enter', self._change_to_studio)
+            else:
+                raise ValueError(f'state without active source {state_name}')
 
         # Initialize the underlying transitions machine
         self._machine = Machine(
