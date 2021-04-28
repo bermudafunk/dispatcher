@@ -162,7 +162,6 @@ class Dispatcher:
             before_state_change=[self._before_state_change],
             after_state_change=[self._after_state_change],
             finalize_event=[self._audit_state, self._assure_lamp_state, self._notify_machine_observers],
-            show_state_attributes=True,
         )
 
         # Add the transitions between the states to the machine
