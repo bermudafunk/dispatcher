@@ -38,10 +38,6 @@ def run_loop():
     for sig_name in ('SIGINT', 'SIGTERM', 'SIGABRT'):
         loop.add_signal_handler(getattr(signal, sig_name), stop)
 
-    logger.debug("Setup systemd notification")
-    from bermudafunk.base import systemd
-    systemd.ready()
-
     try:
         logger.debug("Start loop forever")
         loop.run_forever()
