@@ -12,3 +12,4 @@ studio_X_on_air_studio_Y_takeover_request,off,none,on,green,off,none,blink,yello
 studio_X_on_air_change_to_studio_Y_next_hour_immediate_state,off,none,on,green,on,red,blink,green,on,yellow,off,none,on,yellow
 studio_X_on_air_change_to_studio_Y_next_hour_immediate_release,blink_fast,green,on,green,on,red,blink,green,on,yellow,off,none,on,yellow
 studio_X_on_air_studio_Y_takeover_request_immediate_state,off,none,on,green,on,red,blink,yellow,on,yellow,off,none,on,yellow
+automat_on_air_change_to_studio_X_next_hour_immediate_state,on,green,blink,green,on,red,off,none,off,none,off,none,on,yellow
