@@ -176,6 +176,7 @@ class Dispatcher:
                     if 'before' not in transition:
                         transition['before'] = []
                     transition['before'].append(self._switch_xy)
+                    transition['label'] = transition['trigger'] + ' [switch_xy]'
                 del transition['switch_xy']
             self._machine.add_transition(**transition)
 
