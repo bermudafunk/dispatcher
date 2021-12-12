@@ -8,24 +8,24 @@ import config
 
 loop = asyncio.get_event_loop()
 loop.set_debug(config.DEBUG)
-loop.set_default_executor(ThreadPoolExecutor(thread_name_prefix='AsyncioLoopDefaultExecutor'))
+loop.set_default_executor(ThreadPoolExecutor(thread_name_prefix="AsyncioLoopDefaultExecutor"))
 
 
 def exception_handler(exception_loop: asyncio.AbstractEventLoop, context):
-    if 'exception' in context and isinstance(context['exception'], asyncio.CancelledError):
+    if "exception" in context and isinstance(context["exception"], asyncio.CancelledError):
         return
     exception_loop.default_exception_handler(context)
 
 
 loop.set_exception_handler(exception_handler)
 
-logging.basicConfig(format='%(asctime)s : %(levelname)8s : %(name)30s : %(funcName)-20s : %(lineno)4d : %(message)s')
-logging.getLogger('transitions').setLevel(logging.INFO)
+logging.basicConfig(format="%(asctime)s : %(levelname)8s : %(name)30s : %(funcName)-20s : %(lineno)4d : %(message)s")
+logging.getLogger("transitions").setLevel(logging.INFO)
 
 if config.DEBUG:
-    logging.getLogger('bermudafunk').setLevel(logging.DEBUG)
-    logging.getLogger('bermudafunk.symnet').setLevel(logging.ERROR)
-    logging.getLogger('transitions').setLevel(logging.DEBUG)
+    logging.getLogger("bermudafunk").setLevel(logging.DEBUG)
+    logging.getLogger("bermudafunk.symnet").setLevel(logging.ERROR)
+    logging.getLogger("transitions").setLevel(logging.DEBUG)
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ cleanup_tasks: typing.List[asyncio.Task] = []
 
 def run_loop():
     logger.debug("Install signal handlers on loop")
-    for sig_name in ('SIGINT', 'SIGTERM', 'SIGABRT'):
+    for sig_name in ("SIGINT", "SIGTERM", "SIGABRT"):
         loop.add_signal_handler(getattr(signal, sig_name), stop)
 
     try:

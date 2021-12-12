@@ -102,15 +102,12 @@ def load_states():
                 ),
             ),
         )
-        if 'X' not in name:
+        if "X" not in name:
             lamp_state_target = attr.evolve(lamp_state_target, x=data_types.StudioLampState())
-        if 'Y' not in name:
+        if "Y" not in name:
             lamp_state_target = attr.evolve(lamp_state_target, y=data_types.StudioLampState())
 
-        state = LampAwareState(
-            name=name,
-            lamp_state_target=lamp_state_target
-        )
+        state = LampAwareState(name=name, lamp_state_target=lamp_state_target)
         if state.name in states:
             raise ValueError("Duplicate state name {}".format(state.name))
         states[state.name] = state
@@ -123,9 +120,11 @@ def load_states():
 def load_transitions(states, timers):
     transitions_data = pandas.read_csv("transitions_data/transitions.csv", converters={"switch_xy": bool})
     transitions = transitions_data.to_dict(orient="records")
-    triggers = {"next_hour"} | set(
-        ("{}_{}".format(button.value, studio) for button in data_types.Button for studio in ("X", "Y", "other"))
-    ) | {f"{timer}_timeout" for timer in timers}
+    triggers = (
+        {"next_hour"}
+        | set(("{}_{}".format(button.value, studio) for button in data_types.Button for studio in ("X", "Y", "other")))
+        | {f"{timer}_timeout" for timer in timers}
+    )
     for transition in transitions:
         transition["source"] = states[transition["source"]]
         transition["dest"] = states[transition["dest"]]
@@ -142,7 +141,7 @@ def check_states_ignore_immediate_lamp(states):
             lst,
             x=attr.evolve(lst.x, immediate=common.TriColorLampState()),
             y=attr.evolve(lst.y, immediate=common.TriColorLampState()),
-            other=attr.evolve(lst.other, immediate=common.TriColorLampState())
+            other=attr.evolve(lst.other, immediate=common.TriColorLampState()),
         )
     for state1, state2 in itertools.combinations(modified_states.keys(), 2):
         if modified_states[state1] == modified_states[state2]:

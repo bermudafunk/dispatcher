@@ -21,8 +21,8 @@ class DummyLamp(common.BaseLamp):
     def __init__(self, name: str, state: common.LampState = common.LampState.OFF):
         super().__init__(
             name=name,
-            on_callable=functools.partial(logger.debug, 'Dummy Lamp <{}> ON'.format(name)),
-            off_callable=functools.partial(logger.debug, 'Dummy Lamp <{}> OFF'.format(name)),
+            on_callable=functools.partial(logger.debug, "Dummy Lamp <{}> ON".format(name)),
+            off_callable=functools.partial(logger.debug, "Dummy Lamp <{}> OFF".format(name)),
             state=state,
         )
 
@@ -43,7 +43,7 @@ class DummyTriColorLamp(common.BaseTriColorLamp):
         )
 
     def _on_callable(self):
-        logger.debug('Dummy Lamp <%s> with color <%s> ON', self.name, self.color)
+        logger.debug("Dummy Lamp <%s> with color <%s> ON", self.name, self.color)
 
     def _off_callable(self):
-        logger.debug('Dummy Lamp <%s> with color <%s> OFF', self.name, self.color)
+        logger.debug("Dummy Lamp <%s> with color <%s> OFF", self.name, self.color)

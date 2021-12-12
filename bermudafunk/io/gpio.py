@@ -29,7 +29,8 @@ class GPIO:
             raise ValueError("pull_up_down is only supported on direction RPi.GPIO.IN")
         if direction is RPi.GPIO.IN and pull_up_down not in (None, RPi.GPIO.PUD_UP, RPi.GPIO.PUD_DOWN, RPi.GPIO.PUD_OFF):
             raise ValueError(
-                "pull_up_down has to be one of RPi.GPIO.PUD_UP, RPi.GPIO.PUD_DOWN, RPi.GPIO.PUD_OFF or None, given {}".format(pull_up_down))
+                "pull_up_down has to be one of RPi.GPIO.PUD_UP, RPi.GPIO.PUD_DOWN, RPi.GPIO.PUD_OFF or None, given {}".format(pull_up_down)
+            )
 
         GPIO._used_pins.add(pin)
         self._pin = pin
@@ -53,7 +54,7 @@ class GPIO:
         RPi.GPIO.cleanup(self._pin)
 
     def __repr__(self) -> str:
-        return '{}(pin={!r}, direction={!r}, initial={!r}, pull_up_down={!r})'.format(
+        return "{}(pin={!r}, direction={!r}, initial={!r}, pull_up_down={!r})".format(
             type(self).__name__,
             self._pin,
             self._direction,
@@ -75,22 +76,16 @@ class GPIOButton(common.BaseButton, GPIO):
             raise ValueError("Button only support PUD_UP or PUD_DOWN")
 
         if pull_up_down is RPi.GPIO.PUD_DOWN:
-            RPi.GPIO.add_event_detect(pin,
-                                      RPi.GPIO.RISING,
-                                      callback=self._trigger_observers,
-                                      bouncetime=GPIOButton.DEBOUNCE_TIME)
+            RPi.GPIO.add_event_detect(pin, RPi.GPIO.RISING, callback=self._trigger_observers, bouncetime=GPIOButton.DEBOUNCE_TIME)
         elif pull_up_down is RPi.GPIO.PUD_UP:
-            RPi.GPIO.add_event_detect(pin,
-                                      RPi.GPIO.FALLING,
-                                      callback=self._trigger_observers,
-                                      bouncetime=GPIOButton.DEBOUNCE_TIME)
+            RPi.GPIO.add_event_detect(pin, RPi.GPIO.FALLING, callback=self._trigger_observers, bouncetime=GPIOButton.DEBOUNCE_TIME)
 
     def __del__(self):
         RPi.GPIO.remove_event_detect(self.pin)
         super().__del__()
 
     def __repr__(self) -> str:
-        return '{}(name={!r}, pin={!r}, pull_up_down={!r}, internal_pull={!r})'.format(
+        return "{}(name={!r}, pin={!r}, pull_up_down={!r}, internal_pull={!r})".format(
             type(self).__name__,
             self._name,
             self._pin,
@@ -115,7 +110,7 @@ class GPIOLamp(common.BaseLamp, GPIO):
         super().__del__()
 
     def __repr__(self) -> str:
-        return '{}(name={!r}, pin={!r})'.format(
+        return "{}(name={!r}, pin={!r})".format(
             type(self).__name__,
             self._name,
             self._pin,

@@ -17,13 +17,13 @@ class StudioLampState:
 
 @enum.unique
 class Button(enum.Enum):
-    takeover = 'takeover'
-    release = 'release'
-    immediate = 'immediate'
+    takeover = "takeover"
+    release = "release"
+    immediate = "immediate"
 
 
 class BaseStudio:
-    names: typing.Dict[str, 'BaseStudio'] = {}
+    names: typing.Dict[str, "BaseStudio"] = {}
 
     def __init__(
         self,
@@ -33,7 +33,7 @@ class BaseStudio:
     ):
         self._name = name
         if name in BaseStudio.names.keys():
-            raise ValueError('name already used %s' % name)
+            raise ValueError("name already used %s" % name)
         BaseStudio.names[name] = self
 
         self._main_lamp = main_lamp if main_lamp else DummyTriColorLamp(name="main dummy of " + name)
@@ -68,7 +68,7 @@ class BaseStudio:
 
 class Automat(BaseStudio):
     def __init__(self, main_lamp: BaseTriColorLamp = None):
-        super().__init__(name='Automat', main_lamp=main_lamp)
+        super().__init__(name="Automat", main_lamp=main_lamp)
 
 
 class Studio(BaseStudio):
@@ -149,7 +149,7 @@ class Studio(BaseStudio):
     __immediate_button_coroutine = functools.partialmethod(__button_coroutine, Button.immediate)
 
     def __repr__(self):
-        return '<Studio: name=%s>' % self.name
+        return "<Studio: name=%s>" % self.name
 
 
 @attr.s(frozen=True, slots=True)

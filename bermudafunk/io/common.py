@@ -114,7 +114,7 @@ class BaseLamp(abc.ABC, Observable):
 
     @state.setter
     def state(self, new_state: LampState):
-        logger.debug('Lamp with name <%s> set state <%s>', self.name, new_state)
+        logger.debug("Lamp with name <%s> set state <%s>", self.name, new_state)
         if not isinstance(new_state, LampState):
             raise TypeError(f"This supports only values of {LampState}")
         with self._lock:

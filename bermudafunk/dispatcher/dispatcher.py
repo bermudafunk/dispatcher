@@ -58,10 +58,11 @@ class Dispatcher:
         audit_internal_state=False,
     ):
 
-        self.file_path = 'state.json'
+        self.file_path = "state.json"
 
         # convert _x, _y and _on_air_selector_value to properties to audit their values
         if audit_internal_state:
+
             def _x_get(_self):
                 return _self.__x
 
@@ -69,9 +70,10 @@ class Dispatcher:
                 if _self.__x is new_val:
                     return
                 import inspect
+
                 stack = inspect.stack()
-                logger.debug('stack %s', stack[1].lineno)
-                logger.debug('change _x to %s', new_val)
+                logger.debug("stack %s", stack[1].lineno)
+                logger.debug("change _x to %s", new_val)
                 _self.__x = new_val
 
             def _y_get(_self):
@@ -81,9 +83,10 @@ class Dispatcher:
                 if _self.__y is new_val:
                     return
                 import inspect
+
                 stack = inspect.stack()
-                logger.debug('stack %s', stack[1].lineno)
-                logger.debug('change _y to %s', new_val)
+                logger.debug("stack %s", stack[1].lineno)
+                logger.debug("change _y to %s", new_val)
                 _self.__y = new_val
 
             def _on_air_selector_value_get(_self):
@@ -92,7 +95,7 @@ class Dispatcher:
             def _on_air_selector_value_set(_self, new_val: int):
                 if _self.__on_air_selector_value is new_val:
                     return
-                logger.debug('change _on_air_selector_value to %s', new_val)
+                logger.debug("change _on_air_selector_value to %s", new_val)
                 _self.__on_air_selector_value = new_val
 
             Dispatcher._x = property(_x_get, _x_set)
@@ -130,8 +133,9 @@ class Dispatcher:
             dispatcher_studio.studio.dispatcher_button_event_queue = self._dispatcher_button_event_queue
 
         if self._automat.selector_value in self._selector_value_to_studio.keys():
-            raise ValueError("Automat selector value als assigned to studio {}".format(
-                self._selector_value_to_studio[self._automat.selector_value].name))
+            raise ValueError(
+                "Automat selector value als assigned to studio {}".format(self._selector_value_to_studio[self._automat.selector_value].name)
+            )
         if self._automat.studio in self._studios_to_selector_value.keys():
             raise ValueError("A studio has the magic studio name 'automat'")
 
@@ -152,17 +156,17 @@ class Dispatcher:
         self._timers, states, transitions = load_timers_states_transitions()
 
         for state_name in states:
-            if 'automat_on_air' in state_name:
-                states[state_name].add_callback('enter', self._change_to_automat)
-            elif 'studio_X_on_air' in state_name:
-                states[state_name].add_callback('enter', self._change_to_studio)
+            if "automat_on_air" in state_name:
+                states[state_name].add_callback("enter", self._change_to_automat)
+            elif "studio_X_on_air" in state_name:
+                states[state_name].add_callback("enter", self._change_to_studio)
             else:
-                raise ValueError(f'state without active source {state_name}')
+                raise ValueError(f"state without active source {state_name}")
 
         # Initialize the underlying transitions machine
         self._machine = Machine(
             states=list(states.values()),
-            initial=states['automat_on_air'],
+            initial=states["automat_on_air"],
             send_event=True,
             before_state_change=[self._before_state_change],
             after_state_change=[self._after_state_change],
@@ -171,13 +175,13 @@ class Dispatcher:
 
         # Add the transitions between the states to the machine
         for transition in transitions:
-            if 'switch_xy' in transition:
-                if transition['switch_xy']:
-                    if 'before' not in transition:
-                        transition['before'] = []
-                    transition['before'].append(self._switch_xy)
-                    transition['label'] = transition['trigger'] + ' [switch_xy]'
-                del transition['switch_xy']
+            if "switch_xy" in transition:
+                if transition["switch_xy"]:
+                    if "before" not in transition:
+                        transition["before"] = []
+                    transition["before"].append(self._switch_xy)
+                    transition["label"] = transition["trigger"] + " [switch_xy]"
+                del transition["switch_xy"]
             self._machine.add_transition(**transition)
 
         self._machine_observers: typing.Set[typing.Callable[[Dispatcher, EventData], typing.Any]] = weakref.WeakSet()
@@ -228,12 +232,12 @@ class Dispatcher:
         self._x, self._y = self._y, self._x
 
     def _change_to_automat(self, _: EventData = None):
-        logger.debug('change to automat')
+        logger.debug("change to automat")
         self._on_air_selector_value = self._automat.selector_value
         base.loop.create_task(self._set_current_state())
 
     def _change_to_studio(self, _: EventData = None):
-        logger.debug('change to studio %s', self._x)
+        logger.debug("change to studio %s", self._x)
         self._on_air_selector_value = self._studios_to_selector_value[self._x]
         base.loop.create_task(self._set_current_state())
 
@@ -242,18 +246,18 @@ class Dispatcher:
             return
 
         # check if button event
-        if 'button_event' in event.kwargs.keys():
-            button_event: ButtonEvent = event.kwargs.get('button_event')
+        if "button_event" in event.kwargs.keys():
+            button_event: ButtonEvent = event.kwargs.get("button_event")
             event_name = event.event.name
             # set the studio accordingly
-            if 'X' in event_name:
+            if "X" in event_name:
                 self._x = button_event.studio
-            elif 'Y' in event_name:
+            elif "Y" in event_name:
                 self._y = button_event.studio
 
         # stop timers if the destination event doesn't require them
         destination_state = event.transition.dest
-        if 'next_hour' not in destination_state:
+        if "next_hour" not in destination_state:
             self._stop_next_hour_timer()
         for timer in self._timers:
             if timer not in destination_state:
@@ -264,13 +268,13 @@ class Dispatcher:
             return
 
         # if the destination state doesn't require a studio, set it to None
-        for tmp in ['X', 'Y']:
+        for tmp in ["X", "Y"]:
             if event.transition.dest and tmp not in event.transition.dest:
-                setattr(self, '_' + tmp.lower(), None)
+                setattr(self, "_" + tmp.lower(), None)
 
         # start timers as needed
         destination_state = event.transition.dest
-        if 'next_hour' in destination_state:
+        if "next_hour" in destination_state:
             self._start_next_hour_timer()
         for timer in self._timers:
             if timer in destination_state:
@@ -278,7 +282,7 @@ class Dispatcher:
 
     async def _cleanup(self):
         await base.cleanup_event.wait()
-        logger.debug('cleanup timers')
+        logger.debug("cleanup timers")
         self._stop_next_hour_timer()
         for timer in self._timers:
             self._stop_timer(timer)
@@ -287,20 +291,20 @@ class Dispatcher:
     async def _process_studio_button_events(self):
         while True:
             event: ButtonEvent = await self._dispatcher_button_event_queue.get()
-            logger.debug('got new event %s, process now', event)
+            logger.debug("got new event %s, process now", event)
 
             # a studio is active, to be the X event the button has to be pressed in the X studio
             if self._x is None or self._x == event.studio:
-                append = '_X'
+                append = "_X"
             elif self._y is None or self._y == event.studio:
-                append = '_Y'
+                append = "_Y"
             else:
-                append = '_other'
+                append = "_other"
 
             # if the button press can be mapped to a studio trigger the machine
             trigger_name = event.button.name + append
-            logger.debug('state %s', {'state': self._machine.state, 'x': self._x, 'y': self._y})
-            logger.debug('trigger_name trying to call %s', trigger_name)
+            logger.debug("state %s", {"state": self._machine.state, "x": self._x, "y": self._y})
+            logger.debug("trigger_name trying to call %s", trigger_name)
             # noinspection PyBroadException
             try:
                 self._machine.trigger(trigger_name, button_event=event)
@@ -323,7 +327,7 @@ class Dispatcher:
 
     def _assure_lamp_state(self, _: EventData = None):
         """Set the lamp state in studios"""
-        logger.debug('assure lamp status')
+        logger.debug("assure lamp status")
         if self._signal_error_task:
             self._signal_error_task.cancel()
             self._signal_error_task = None
@@ -341,31 +345,31 @@ class Dispatcher:
         """Assure the required studios and only these are set"""
         logger.debug("Audit state")
         state = self._machine.state
-        if 'X' in state:
+        if "X" in state:
             if self._x is None:
-                logger.critical('X in state and self._X is None')
+                logger.critical("X in state and self._X is None")
         else:
             if self._x is not None:
-                logger.critical('X not in state and self._X is not None')
+                logger.critical("X not in state and self._X is not None")
 
-        if 'Y' in state:
+        if "Y" in state:
             if self._y is None:
-                logger.critical('Y in state and self._Y is None')
+                logger.critical("Y in state and self._Y is None")
         else:
             if self._y is not None:
-                logger.critical('Y not in state and self._Y is not None')
+                logger.critical("Y not in state and self._Y is not None")
 
     async def _assure_current_state_loop(self):
         """In case something is going terrible wrong regarding the communication with the SymNetController, just the value again on a regular time frame"""
         while True:
-            logger.debug('Assure that the controller have the desired state!')
+            logger.debug("Assure that the controller have the desired state!")
             await self._set_current_state()
             sleep_time = random.randint(300, 600)
-            logger.debug('Sleep for %s seconds', sleep_time)
+            logger.debug("Sleep for %s seconds", sleep_time)
             await asyncio.sleep(sleep_time)
 
     async def _set_current_state(self, *_, **__):
-        logger.info('Set the controller state now to %s!', self._on_air_selector_value)
+        logger.info("Set the controller state now to %s!", self._on_air_selector_value)
         await self._symnet_controller.set_position(self._on_air_selector_value)
 
     def _start_next_hour_timer(self, _: EventData = None):
@@ -377,28 +381,28 @@ class Dispatcher:
 
     async def __hour_timer(self):
         """Try to issue the trigger event as closely as possible to the full hour"""
-        logger.debug('start hour timer')
+        logger.debug("start hour timer")
 
         try:
             next_hour = calc_next_hour()
             duration_to_next_hour_seconds = (next_hour - datetime.now(tz=tz.UTC)).total_seconds()
             while duration_to_next_hour_seconds > 0.3:
-                logger.debug('duration to next full hour %s', duration_to_next_hour_seconds)
+                logger.debug("duration to next full hour %s", duration_to_next_hour_seconds)
 
                 sleep_time = duration_to_next_hour_seconds
                 if duration_to_next_hour_seconds > 2:
                     sleep_time = duration_to_next_hour_seconds - 2
-                    logger.debug('sleep time %s', sleep_time)
+                    logger.debug("sleep time %s", sleep_time)
                     await asyncio.sleep(sleep_time)
                 else:
-                    logger.debug('sleep time %s', sleep_time)
+                    logger.debug("sleep time %s", sleep_time)
                     await asyncio.sleep(sleep_time)
                     break
                 duration_to_next_hour_seconds = (next_hour - datetime.now(tz=tz.UTC)).total_seconds()
 
-            logger.info('hourly event %s', next_hour)
+            logger.info("hourly event %s", next_hour)
             try:
-                self._machine.trigger('next_hour')
+                self._machine.trigger("next_hour")
             except MachineError as e:
                 logger.critical(e)
 
@@ -408,7 +412,7 @@ class Dispatcher:
 
     def _stop_next_hour_timer(self, _: EventData = None):
         if self._next_hour_timer:
-            logger.debug('stop next hour timer')
+            logger.debug("stop next hour timer")
             self._next_hour_timer.cancel()
             self._next_hour_timer = None
 
@@ -418,40 +422,40 @@ class Dispatcher:
             if task and not task.done():
                 return
 
-        logger.debug('start %s timer', timer)
+        logger.debug("start %s timer", timer)
         self._timer_tasks[timer] = base.loop.create_task(self.__timer(timer))
 
     async def __timer(self, timer: str):
-        logger.debug('started %s timer', timer)
+        logger.debug("started %s timer", timer)
 
         try:
             await asyncio.sleep(self._timers[timer])
             try:
-                self._machine.trigger(f'{timer}_timeout')
+                self._machine.trigger(f"{timer}_timeout")
             except MachineError as e:
                 logger.critical(e)
         finally:
             self._timer_tasks[timer] = None
-            logger.debug('finished %s timer', timer)
+            logger.debug("finished %s timer", timer)
 
     def _stop_timer(self, timer: str):
         if timer in self._timer_tasks and self._timer_tasks[timer]:
-            logger.debug('stop %s timer', timer)
+            logger.debug("stop %s timer", timer)
             self._timer_tasks[timer].cancel()
             del self._timer_tasks[timer]
 
     @property
     def status(self):
         return {
-            'state': self.machine.state,
-            'on_air_studio': self.on_air_studio_name,
-            'x': self._x.name if self._x else None,
-            'y': self._y.name if self._y else None,
+            "state": self.machine.state,
+            "on_air_studio": self.on_air_studio_name,
+            "x": self._x.name if self._x else None,
+            "y": self._y.name if self._y else None,
         }
 
     def load(self):
         try:
-            with open(self.file_path, 'r') as fp:
+            with open(self.file_path, "r") as fp:
                 state = json.load(fp)
                 state = self._SaveState(**state)
                 logger.debug(state)
@@ -462,33 +466,29 @@ class Dispatcher:
                     self._y = Studio.names[state.y]
 
             # assure that the correct studio is on air
-            if 'automat_on_air' in state.state:
-                logger.debug('switch to automat')
+            if "automat_on_air" in state.state:
+                logger.debug("switch to automat")
                 self._change_to_automat()
-            elif 'studio_X_on_air' in state.state:
-                logger.debug('switch to studio')
+            elif "studio_X_on_air" in state.state:
+                logger.debug("switch to studio")
                 self._change_to_studio()
 
-            self._machine.trigger('to_' + state.state)
+            self._machine.trigger("to_" + state.state)
         except KeyError as e:
-            logger.critical('Could not load specific studio: %s', e)
+            logger.critical("Could not load specific studio: %s", e)
         except IOError as e:
             if e.errno == 2:
-                logger.warning('Could not load dispatcher state: %s', e)
+                logger.warning("Could not load dispatcher state: %s", e)
             else:
-                logger.critical('Could not load dispatcher state: %s', e)
+                logger.critical("Could not load dispatcher state: %s", e)
         except json.JSONDecodeError as e:
-            logger.critical('Could not load dispatcher state: %s', e)
+            logger.critical("Could not load dispatcher state: %s", e)
 
     def save(self):
-        state = self._SaveState(
-            x=self._x.name if self._x else None,
-            y=self._y.name if self._y else None,
-            state=self._machine.state
-        )
+        state = self._SaveState(x=self._x.name if self._x else None, y=self._y.name if self._y else None, state=self._machine.state)
         logger.debug(state)
         try:
-            with open(self.file_path, 'w') as fp:
+            with open(self.file_path, "w") as fp:
                 json.dump(attr.asdict(state), fp)
         except Exception as e:
             logger.error(e)

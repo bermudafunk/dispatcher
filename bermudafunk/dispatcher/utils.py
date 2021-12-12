@@ -3,7 +3,7 @@ import datetime
 from croniter import croniter
 from dateutil import tz
 
-_next_hour_cron = croniter('0 * * * *')
+_next_hour_cron = croniter("0 * * * *")
 
 
 def calc_next_hour(now=None):
