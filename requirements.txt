@@ -1,4 +1,4 @@
-rpi.gpio~=0.7.0
+rpi.gpio~=0.7.1a4
 aiohttp[speedups]~=3.7.4
 transitions~=0.8.2
 pygraphviz~=1.6
