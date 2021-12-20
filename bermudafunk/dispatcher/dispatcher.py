@@ -217,6 +217,10 @@ class Dispatcher:
         return self._selector_value_to_studio[self._on_air_selector_value].name
 
     @property
+    def studio_on_air(self) -> bool:
+        return self._on_air_selector_value != self._automat.selector_value
+
+    @property
     def machine(self) -> Machine:
         return self._machine
 

@@ -56,6 +56,11 @@ async def run(dispatcher: Dispatcher):
         await base.loop.run_in_executor(None, functools.partial(redraw_graph, dispatcher))
         return web.HTTPFound("/static/partial_state_machine.png")
 
+    @routes.get("/live")
+    async def live(_: web.Request) -> web.Response:
+        body = "1" if dispatcher.studio_on_air else "0"
+        return web.Response(body=body)
+
     @routes.get("/api/v1/status")
     async def dispatcher_status(_: web.Request) -> web.StreamResponse:
         return web.json_response(dispatcher.status, dumps=json.dumps)
