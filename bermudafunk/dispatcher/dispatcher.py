@@ -10,8 +10,8 @@ import attr
 from dateutil import tz
 from transitions import EventData, MachineError
 
+import symnet_cp
 from bermudafunk import base
-from bermudafunk import symnet
 from bermudafunk.dispatcher.data_types import BaseStudio, ButtonEvent, DispatcherStudioDefinition, Studio
 from bermudafunk.dispatcher.transitions import LampAwareMachine as Machine, LampStateTarget, load_timers_states_transitions
 from bermudafunk.dispatcher.utils import calc_next_hour
@@ -52,7 +52,7 @@ class Dispatcher:
 
     def __init__(
         self,
-        symnet_controller: symnet.SymNetSelectorController,
+        symnet_controller: symnet_cp.SymNetSelectorController,
         automat: DispatcherStudioDefinition,
         dispatcher_studios: typing.List[DispatcherStudioDefinition],
         audit_internal_state=False,
@@ -110,7 +110,7 @@ class Dispatcher:
         self._signal_error_task: typing.Optional[asyncio.Task] = None
 
         # collecting button presses
-        self._dispatcher_button_event_queue: asyncio.Queue = asyncio.Queue(maxsize=1, loop=base.loop)
+        self._dispatcher_button_event_queue: asyncio.Queue = asyncio.Queue(maxsize=1)
 
         # the value of the automat source in the SymNetSelectorController
         if not 1 <= automat.selector_value <= symnet_controller.position_count:
@@ -198,9 +198,9 @@ class Dispatcher:
 
         # Start timers
         self._symnet_controller.add_observer(self._set_current_state)
-        base.start_cleanup_aware_coroutine(self._assure_current_state_loop)
-        base.start_cleanup_aware_coroutine(self._process_studio_button_events)
-        base.cleanup_tasks.append(base.loop.create_task(self._cleanup()))
+        asyncio.create_task(self._assure_current_state_loop())
+        asyncio.create_task(self._process_studio_button_events())
+        base.cleanup_tasks.append(asyncio.create_task(self._cleanup()))
 
     def _notify_machine_observers(self, event: EventData):
         for observer in self._machine_observers:
@@ -238,12 +238,12 @@ class Dispatcher:
     def _change_to_automat(self, _: EventData = None):
         logger.debug("change to automat")
         self._on_air_selector_value = self._automat.selector_value
-        base.loop.create_task(self._set_current_state())
+        asyncio.create_task(self._set_current_state())
 
     def _change_to_studio(self, _: EventData = None):
         logger.debug("change to studio %s", self._x)
         self._on_air_selector_value = self._studios_to_selector_value[self._x]
-        base.loop.create_task(self._set_current_state())
+        asyncio.create_task(self._set_current_state())
 
     def _before_state_change(self, event: EventData):
         if event.transition.dest is None:  # internal transition, don't do anything right now
@@ -285,7 +285,11 @@ class Dispatcher:
                 self._start_timer(timer)
 
     async def _cleanup(self):
-        await base.cleanup_event.wait()
+        try:
+            while True:
+                await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            pass
         logger.debug("cleanup timers")
         self._stop_next_hour_timer()
         for timer in self._timers:
@@ -314,7 +318,7 @@ class Dispatcher:
                 self._machine.trigger(trigger_name, button_event=event)
             except:
                 logger.warning("Unable to process trigger %s of studio %s", trigger_name, event.studio.name)
-                self._signal_error_task = base.loop.create_task(self._signal_error(event.studio))
+                self._signal_error_task = asyncio.create_task(self._signal_error(event.studio))
                 continue
             finally:
                 self._audit_state()
@@ -381,7 +385,7 @@ class Dispatcher:
         if self._next_hour_timer and not self._next_hour_timer.done():
             return
 
-        self._next_hour_timer = base.loop.create_task(self.__hour_timer())
+        self._next_hour_timer = asyncio.create_task(self.__hour_timer())
 
     async def __hour_timer(self):
         """Try to issue the trigger event as closely as possible to the full hour"""
@@ -427,7 +431,7 @@ class Dispatcher:
                 return
 
         logger.debug("start %s timer", timer)
-        self._timer_tasks[timer] = base.loop.create_task(self.__timer(timer))
+        self._timer_tasks[timer] = asyncio.create_task(self.__timer(timer))
 
     async def __timer(self, timer: str):
         logger.debug("started %s timer", timer)

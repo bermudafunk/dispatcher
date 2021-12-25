@@ -8,16 +8,17 @@ import itertools
 import logging
 import threading
 import time
+import typing
 from typing import Callable, List, Optional, Set
 
 import attr
-
-from bermudafunk import base
 
 logger = logging.getLogger(__name__)
 
 
 class Observable:
+    loop: typing.ClassVar[Optional[asyncio.BaseEventLoop]] = None
+
     def __init__(self):
         self.__observer: Set[Callable] = set()
 
@@ -40,7 +41,8 @@ class Observable:
             if inspect.iscoroutinefunction(observer) or (
                 isinstance(observer, functools.partial) and inspect.iscoroutinefunction(observer.func)
             ):
-                asyncio.run_coroutine_threadsafe(observer(), base.loop)
+                if self.loop:
+                    asyncio.run_coroutine_threadsafe(observer(), self.loop)
             else:
                 observer()
 

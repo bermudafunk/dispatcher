@@ -1,21 +1,25 @@
+import asyncio
+
+import symnet_cp
 from bermudafunk import base
 from bermudafunk.dispatcher import web
 from bermudafunk.dispatcher.data_types import Automat, DispatcherStudioDefinition, Studio
 from bermudafunk.dispatcher.dispatcher import Dispatcher
+from bermudafunk.io.common import Observable
 from bermudafunk.io.pixtend import Pixtend, PixtendButton, PixtendTriColorLamp
-from bermudafunk.symnet import SymNetDevice
 
-if __name__ == "__main__":
+
+async def main():
     base.logger.debug("Main Start")
+    Observable.loop = asyncio.get_running_loop()
 
     pixtend = Pixtend(autostart=False)
-    base.cleanup_tasks.append(base.loop.create_task(pixtend.cleanup_aware_shutdown()))
 
-    device = SymNetDevice(
+    device = await symnet_cp.SymNetDevice.create(
         local_address=(base.config.myIp, base.config.myPort), remote_address=(base.config.remoteIp, base.config.remotePort)
     )
 
-    main_selector = device.define_selector(1, 8)
+    main_selector = await device.define_selector(1, 8)
 
     automat = Automat(
         main_lamp=PixtendTriColorLamp(
@@ -109,6 +113,15 @@ if __name__ == "__main__":
     dispatcher.start()
     pixtend.start_communication_thread()
 
-    base.cleanup_tasks.append(base.loop.create_task(web.run(dispatcher)))
+    base.cleanup_tasks.append(asyncio.create_task(web.run(dispatcher)))
 
-    base.run_loop()
+    try:
+        while True:
+            await asyncio.sleep(3600)
+    except asyncio.CancelledError:
+        await device.cleanup()
+        await asyncio.wait(base.cleanup_tasks)
+
+
+if __name__ == "__main__":
+    asyncio.run(main(), debug=True)

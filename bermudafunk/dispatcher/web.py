@@ -9,7 +9,6 @@ import aiohttp
 import prometheus_async
 from aiohttp import web
 
-from bermudafunk import base
 from bermudafunk.base import json
 from bermudafunk.dispatcher.data_types import BaseStudio, Button, ButtonEvent
 from bermudafunk.dispatcher.dispatcher import Dispatcher
@@ -48,12 +47,12 @@ async def run(dispatcher: Dispatcher):
 
     @routes.get("/api/v1/full_state_machine")
     async def generate_full_machine_image(_: web.Request) -> web.StreamResponse:
-        await base.loop.run_in_executor(None, functools.partial(redraw_complete_graph, dispatcher))
+        await asyncio.get_running_loop().run_in_executor(None, functools.partial(redraw_complete_graph, dispatcher))
         return web.HTTPFound("/static/full_state_machine.png")
 
     @routes.get("/api/v1/partial_state_machine")
     async def generate_partial_machine_image(_: web.Request) -> web.StreamResponse:
-        await base.loop.run_in_executor(None, functools.partial(redraw_graph, dispatcher))
+        await asyncio.get_running_loop().run_in_executor(None, functools.partial(redraw_graph, dispatcher))
         return web.HTTPFound("/static/partial_state_machine.png")
 
     @routes.get("/live")
@@ -168,11 +167,15 @@ async def run(dispatcher: Dispatcher):
     site = web.TCPSite(runner, "192.168.96.42", 8080)
     await site.start()
     dispatcher.machine_observers.add(dispatcher_observer)
-    dispatcher_observer_push_task = base.loop.create_task(dispatcher_observer_push())
+    dispatcher_observer_push_task = asyncio.create_task(dispatcher_observer_push())
     for studio_ in dispatcher.studios:
         studio_.immediate_lamp.add_observer(lamp_observer)
-    lamp_observer_push_task = base.loop.create_task(lamp_observer_push())
-    await base.cleanup_event.wait()
+    lamp_observer_push_task = asyncio.create_task(lamp_observer_push())
+    try:
+        while True:
+            await asyncio.sleep(3600)
+    except asyncio.CancelledError:
+        pass
     dispatcher_observer_push_task.cancel()
     lamp_observer_push_task.cancel()
     await close_remaining_websockets()

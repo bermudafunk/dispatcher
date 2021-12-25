@@ -11,7 +11,6 @@ import warnings
 import prometheus_client
 import spidev
 
-from bermudafunk.base import cleanup_event
 from bermudafunk.io import common
 from bermudafunk.io.common import BaseButton, BaseLamp, BaseTriColorLamp, LampState, TriColorLampColor
 from bermudafunk.io.gpio import GPIOLamp as GPIOOutput
@@ -196,8 +195,6 @@ class Pixtend(common.Observable):
             self.start_communication_thread()
 
     async def cleanup_aware_shutdown(self):
-        logger.debug("Awaiting cleanup event now")
-        await cleanup_event.wait()
         logger.debug("Cleanup event received in Pixtend")
         self.stop_communication_thread()
 
