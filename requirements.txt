@@ -6,7 +6,7 @@ spidev~=3.5
 prometheus_client~=0.12.0
 python-dateutil~=2.8.1
 pandas~=1.2.3
-attrs~=21.2.0
+attrs~=21.4.0
 croniter~=1.0.11
 prometheus_async~=19.2.0
-symnet-cp
+symnet-cp>=0.2.1

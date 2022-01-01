@@ -1,6 +1,9 @@
 import asyncio
+import functools
+import signal
 
 import symnet_cp
+
 from bermudafunk import base
 from bermudafunk.dispatcher import web
 from bermudafunk.dispatcher.data_types import Automat, DispatcherStudioDefinition, Studio
@@ -10,6 +13,18 @@ from bermudafunk.io.pixtend import Pixtend, PixtendButton, PixtendTriColorLamp
 
 
 async def main():
+    def ask_exit(signame):
+        base.logger.error("got signal %s: exit" % signame)
+        for task in asyncio.all_tasks():
+            task.cancel()
+
+    loop = asyncio.get_running_loop()
+
+    for signame in {"SIGINT", "SIGTERM"}:
+        loop.add_signal_handler(
+            getattr(signal, signame), functools.partial(ask_exit, signame)
+        )
+
     base.logger.debug("Main Start")
     Observable.loop = asyncio.get_running_loop()
 
