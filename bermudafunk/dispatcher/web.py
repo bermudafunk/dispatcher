@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 import aiohttp
 import prometheus_async
 from aiohttp import web
+from symnet_cp import SymNetSelectorController
 
 from bermudafunk.base import json
 from bermudafunk.dispatcher.data_types import BaseStudio, Button, ButtonEvent
@@ -27,7 +28,7 @@ def redraw_graph(dispatcher: Dispatcher):
     dispatcher.machine.get_graph(force_new=True, show_roi=True).draw("static/partial_state_machine.png", prog="dot")
 
 
-async def run(dispatcher: Dispatcher):
+async def run(dispatcher: Dispatcher, ukw_selector: SymNetSelectorController):
     dispatcher_observer_event = asyncio.Event()
     lamp_observer_event = asyncio.Event()
 
@@ -45,6 +46,25 @@ async def run(dispatcher: Dispatcher):
     async def thread_names(_: web.Request) -> web.StreamResponse:
         return web.json_response([thread.name for thread in threading.enumerate()])
 
+    @routes.get("/live")
+    async def live(_: web.Request) -> web.Response:
+        body = "1" if dispatcher.studio_on_air else "0"
+        return web.Response(body=body)
+
+    @routes.get("/ukw_selector")
+    async def get_ukw_selector(_: web.Request) -> web.Response:
+        position = await ukw_selector.get_position()
+        return web.Response(body=str(position))
+
+    @routes.post("/ukw_selector")
+    async def set_ukw_selector(request: web.Request) -> web.Response:
+        data = await request.json()
+        try:
+            await ukw_selector.set_position(int(data["position"]))
+            return web.Response()
+        except Exception as e:
+            return web.Response(status=500, body=f"Error occurred: {e!r}")
+
     @routes.get("/api/v1/full_state_machine")
     async def generate_full_machine_image(_: web.Request) -> web.StreamResponse:
         await asyncio.get_running_loop().run_in_executor(None, functools.partial(redraw_complete_graph, dispatcher))
@@ -54,11 +74,6 @@ async def run(dispatcher: Dispatcher):
     async def generate_partial_machine_image(_: web.Request) -> web.StreamResponse:
         await asyncio.get_running_loop().run_in_executor(None, functools.partial(redraw_graph, dispatcher))
         return web.HTTPFound("/static/partial_state_machine.png")
-
-    @routes.get("/live")
-    async def live(_: web.Request) -> web.Response:
-        body = "1" if dispatcher.studio_on_air else "0"
-        return web.Response(body=body)
 
     @routes.get("/api/v1/status")
     async def dispatcher_status(_: web.Request) -> web.StreamResponse:

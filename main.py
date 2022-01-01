@@ -128,7 +128,10 @@ async def main():
     dispatcher.start()
     pixtend.start_communication_thread()
 
-    base.cleanup_tasks.append(asyncio.create_task(web.run(dispatcher)))
+    ukw_selector = await device.define_selector(2, 2)
+
+    web_run_task = asyncio.create_task(web.run(dispatcher, ukw_selector))
+    base.cleanup_tasks.append(web_run_task)
 
     try:
         while True:
