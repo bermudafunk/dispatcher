@@ -316,7 +316,7 @@ class Pixtend(common.Observable):
                 # We probably are not executing fast enough
                 # to hold the deadlines.
                 # But sleep at least one millisecond to give other threads
-                # a chance. Otherwise we might starve them.
+                # a chance. Otherwise, we might starve them.
                 self.logger.warning("Executing to slow!")
                 next_com = now + 1e-3
 

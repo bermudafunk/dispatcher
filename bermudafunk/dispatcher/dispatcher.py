@@ -189,7 +189,7 @@ class Dispatcher:
         self._started = False
 
     def start(self):
-        """Start the long running dispatcher tasks"""
+        """Start the long-running dispatcher tasks"""
         if self._started:
             return
         self._started = True
