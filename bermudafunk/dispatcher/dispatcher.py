@@ -106,7 +106,7 @@ class Dispatcher:
 
         # task holders
         self._next_hour_timer: typing.Optional[asyncio.Task] = None
-        self._timer_tasks: typing.Dict[str, asyncio.Task] = {}
+        self._timer_tasks: typing.Dict[str, typing.Optional[asyncio.Task]] = {}
         self._signal_error_task: typing.Optional[asyncio.Task] = None
 
         # collecting button presses
