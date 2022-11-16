@@ -371,7 +371,10 @@ class Dispatcher:
         """In case something is going terrible wrong regarding the communication with the SymNetController, just the value again on a regular time frame"""
         while True:
             logger.debug("Assure that the controller have the desired state!")
-            await self._set_current_state()
+            try:
+                await self._set_current_state()
+            except Exception as e:
+                logger.error("Exception during assuring the desired state of the symnet controller", e)
             sleep_time = random.randint(300, 600)
             logger.debug("Sleep for %s seconds", sleep_time)
             await asyncio.sleep(sleep_time)
