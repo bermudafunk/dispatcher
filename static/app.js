@@ -87,8 +87,10 @@ $.get(
     function (data) {
         const studio_selector = $('#studio_selector');
         studio_selector.empty();
-        studio_selector.append($('<option></option>'));
 
+        if (data.length !== 1) {
+            studio_selector.append($('<option></option>'));
+        }
         data.forEach(function (studio) {
             studio_selector.append(
                 $('<option value="' + studio + '">' + studio + '</option>')
@@ -134,7 +136,7 @@ function connection_start() {
         update_selected_studio($('#studio_selector').val());
     };
 
-// Log errors
+    // Log errors
     connection.onerror = function (error) {
         console.log('WebSocket Error ' + error);
     };
@@ -146,7 +148,7 @@ function connection_start() {
         }, 10000);
     };
 
-// Log messages from the server
+    // Log messages from the server
     connection.onmessage = function (e) {
         const data = JSON.parse(e.data);
 

@@ -1,5 +1,6 @@
 import asyncio
 import functools
+import itertools
 import logging
 import threading
 import weakref
@@ -13,6 +14,7 @@ from symnet_cp import SymNetSelectorController
 from bermudafunk.base import json
 from bermudafunk.dispatcher.data_types import BaseStudio, Button, ButtonEvent
 from bermudafunk.dispatcher.dispatcher import Dispatcher
+from bermudafunk.io.common import LampState, TriColorLampColor, TriColorLampState
 
 logger = logging.getLogger(__name__)
 
@@ -28,11 +30,23 @@ def redraw_graph(dispatcher: Dispatcher):
     dispatcher.machine.get_graph(force_new=True, show_roi=True).draw("static/partial_state_machine.png", prog="dot")
 
 
+async def cycle_all_leds(studios: list[BaseStudio], delay: float):
+    for color in itertools.cycle(TriColorLampColor):
+        lamp_state = TriColorLampState(color=color, state=LampState.ON)
+        for studio in studios:
+            studio.main_lamp.color_lamp_state = lamp_state
+            studio.immediate_lamp.color_lamp_state = lamp_state
+        await asyncio.sleep(delay)
+
+
 async def run(dispatcher: Dispatcher, ukw_selector: SymNetSelectorController):
     dispatcher_observer_event = asyncio.Event()
     lamp_observer_event = asyncio.Event()
 
     app = web.Application()
+
+    debug_task_key = web.AppKey("debug_task_key", asyncio.Task | None)
+    app[debug_task_key] = None
 
     routes = web.RouteTableDef()
 
@@ -64,6 +78,20 @@ async def run(dispatcher: Dispatcher, ukw_selector: SymNetSelectorController):
             return web.Response()
         except Exception as e:
             return web.Response(status=500, body=f"Error occurred: {e!r}")
+
+    @routes.get("/debug/start")
+    async def debug_start(_: web.Request) -> web.Response:
+        if app[debug_task_key] is None:
+            app[debug_task_key] = asyncio.create_task(cycle_all_leds(dispatcher.studios_with_automat, 2))
+        return web.Response(status=200, body="Debug mode started")
+
+    @routes.get("/debug/stop")
+    async def debug_stop(_: web.Request) -> web.Response:
+        if app[debug_task_key] is not None:
+            app[debug_task_key].cancel()
+            app[debug_task_key] = None
+        dispatcher._assure_lamp_state()
+        return web.Response(status=200, body="Debug mode stopped")
 
     @routes.get("/api/v1/full_state_machine")
     async def generate_full_machine_image(_: web.Request) -> web.StreamResponse:
