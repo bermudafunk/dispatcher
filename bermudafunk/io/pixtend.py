@@ -10,10 +10,10 @@ import warnings
 
 import prometheus_client
 import spidev
+from gpiozero import DigitalOutputDevice
 
 from bermudafunk.io import common
 from bermudafunk.io.common import BaseButton, BaseLamp, BaseTriColorLamp, LampState, TriColorLampColor
-from bermudafunk.io.gpio import GPIOLamp as GPIOOutput
 
 logger = logging.getLogger(__name__)
 
@@ -179,10 +179,10 @@ class Pixtend(common.Observable):
 
         self._retain_data_in = bytes()
 
-        self._mc_enable = GPIOOutput("Pixtend microcontroller spi enable", 18)
-        self._mc_enable.state = LampState.ON
-        self._mc_reset = GPIOOutput("Pixtend microcontroller reset", 16)
-        self._mc_reset.state = LampState.OFF
+        # Pixtend microcontroller spi enable, board pin 18, GPIO 24
+        self._mc_enable = DigitalOutputDevice(pin=24, active_high=True, initial_value=True)
+        # Pixtend microcontroller reset, board pin 16, GPIO 23
+        self._mc_reset = DigitalOutputDevice(pin=23, active_high=True, initial_value=False)
 
         self._spi = spidev.SpiDev(0, 0)
         self._spi.open(0, 0)
@@ -202,8 +202,8 @@ class Pixtend(common.Observable):
         self.stop_communication_thread()
         self._spi.close()
         self._spi = None
-        self._mc_enable.state = LampState.OFF
-        self._mc_reset.state = LampState.OFF
+        self._mc_enable.off()
+        self._mc_reset.off()
 
     def _pack_output(self) -> bytes:
         with self.transfer_lock:
