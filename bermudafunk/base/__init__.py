@@ -10,6 +10,7 @@ logging.basicConfig(
 )
 
 logging.getLogger("transitions").setLevel(logging.INFO)
+logging.getLogger("bermudafunk.io.dummy").setLevel(logging.INFO)
 
 if config.DEBUG:
     logging.getLogger("bermudafunk").setLevel(logging.DEBUG)

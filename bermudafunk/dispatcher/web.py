@@ -7,6 +7,7 @@ import weakref
 from concurrent.futures import ThreadPoolExecutor
 
 import aiohttp
+import aiohttp_remotes
 import prometheus_async
 from aiohttp import web
 from symnet_cp import SymNetSelectorController
@@ -44,6 +45,7 @@ async def run(dispatcher: Dispatcher, ukw_selector: SymNetSelectorController):
     lamp_observer_event = asyncio.Event()
 
     app = web.Application()
+    await aiohttp_remotes.XForwardedRelaxed().setup(app)
 
     debug_task_key = web.AppKey("debug_task_key", asyncio.Task | None)
     app[debug_task_key] = None
@@ -55,6 +57,11 @@ async def run(dispatcher: Dispatcher, ukw_selector: SymNetSelectorController):
     @routes.get("/")
     async def redirect_to_static_html(_: web.Request) -> web.StreamResponse:
         return web.HTTPFound("/static/index.html")
+
+    @routes.get("/ip")
+    async def ip(req: web.Request) -> web.Response:
+        return web.Response(body=req.remote)
+
 
     @routes.get("/threads")
     async def thread_names(_: web.Request) -> web.StreamResponse:
@@ -112,12 +119,24 @@ async def run(dispatcher: Dispatcher, ukw_selector: SymNetSelectorController):
         return web.json_response([studio.name for studio in dispatcher.studios_with_automat], dumps=json.dumps)
 
     @routes.get("/api/v1/studio_names")
-    async def studio_names(_: web.Request) -> web.StreamResponse:
-        return web.json_response([studio.name for studio in dispatcher.studios], dumps=json.dumps)
+    async def studio_names(request: web.Request) -> web.StreamResponse:
+        names = [studio.name for studio in dispatcher.studios]
+        if "x-studio" in request.headers:
+            names = [request.headers["x-studio"]]
+
+        return web.json_response(names, dumps=json.dumps)
 
     @routes.get("/api/v1/{studio_name}/press/{button}")
     async def button_press(request: web.Request) -> web.StreamResponse:
-        event = ButtonEvent(studio=BaseStudio.names[request.match_info["studio_name"]], button=Button(request.match_info["button"]))
+        studio = request.match_info["studio_name"]
+        button = request.match_info["button"]
+
+        if "x-studio" in request.headers:
+            expected_studio = request.headers["x-studio"]
+            if expected_studio != studio:
+                raise web.HTTPForbidden(reason=f"Wrong studio, got {studio} instead of {expected_studio}")
+
+        event = ButtonEvent(studio=BaseStudio.names[studio], button=Button(button))
 
         await event.studio.dispatcher_button_event_queue.put(event)
 
@@ -207,7 +226,7 @@ async def run(dispatcher: Dispatcher, ukw_selector: SymNetSelectorController):
 
     runner = web.AppRunner(app, handle_signals=False)
     await runner.setup()
-    site = web.TCPSite(runner, "192.168.96.42", 8080)
+    site = web.TCPSite(runner, None, 8080)
     await site.start()
     dispatcher.machine_observers.add(dispatcher_observer)
     dispatcher_observer_push_task = asyncio.create_task(dispatcher_observer_push())
